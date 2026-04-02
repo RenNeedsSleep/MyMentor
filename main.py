@@ -14,7 +14,11 @@ from sqlalchemy import or_, and_, func
 
 from database import engine, get_db, Base
 from models import User, TutorProfile, AvailabilitySlot, Booking, Recording, Message
+from models import Batch, BatchMember, VideoSession, SessionMaterial  # new models for table creation
 from auth import hash_password, verify_password, create_access_token, decode_access_token
+from services.messaging_access import check_batch_relationship
+from routers.batch_router import batch_router
+from routers.session_router import session_router
 
 
 
@@ -26,6 +30,10 @@ Base.metadata.create_all(bind=engine)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+# --- Register new feature routers (non-breaking additions) ---
+app.include_router(batch_router)
+app.include_router(session_router)
 
 
 
@@ -591,6 +599,15 @@ async def send_message(
     user = get_current_user(request, db)
     if not user:
         return RedirectResponse(url="/login", status_code=302)
+
+    # --- Batch-based messaging restriction (backward-compatible) ---
+    partner = db.query(User).filter(User.id == partner_id).first()
+    if partner and user.role == "student" and partner.role == "tutor":
+        if not check_batch_relationship(db, student_id=user.id, tutor_id=partner.id):
+            raise HTTPException(
+                status_code=403,
+                detail="You can only message tutors you share a batch with."
+            )
 
     msg = Message(
         sender_id=user.id,
