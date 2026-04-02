@@ -23,6 +23,9 @@
             <a href="/student/search" class="mm-sidebar-link">
                 <span class="icon"><i class="bi bi-search"></i></span> Find a Tutor
             </a>
+            <a href="#" class="mm-sidebar-link" onclick="showTab('batches')">
+                <span class="icon"><i class="bi bi-collection"></i></span> Batches
+            </a>
             <a href="/messages" class="mm-sidebar-link">
                 <span class="icon"><i class="bi bi-chat-dots"></i></span> Messages
                 {% if unread_count %}<span class="mm-notif-dot">{{ unread_count }}</span>{% endif %}
@@ -199,6 +202,108 @@
                 </div>
                 {% endif %}
             </div>
+        </div>
+
+        <!-- BATCHES TAB -->
+        <div id="tab-batches" class="mm-tab-content">
+            <div class="mm-page-header">
+                <h1>Batches</h1>
+                <p>Browse and join class batches created by tutors</p>
+            </div>
+
+            {% if all_batches %}
+            {% for batch in all_batches %}
+            <div class="mm-card" style="margin-bottom: 1.5rem;">
+                <div class="mm-card-header">
+                    <h3>{{ batch.name }}</h3>
+                    <div>
+                        {% if batch.is_joined %}
+                        <span class="mm-badge mm-badge-accent">Joined</span>
+                        {% else %}
+                        <span class="mm-badge mm-badge-primary">{{ batch.member_count }}/{{ batch.max_students }} students</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div>
+                        {% if batch.description %}
+                        <p style="color: var(--text-muted); margin: 0; font-size: 0.9rem;">{{ batch.description }}</p>
+                        {% endif %}
+                        <div style="margin-top: 0.5rem; font-size: 0.85rem;">
+                            <span style="color: var(--text-muted);"><i class="bi bi-person"></i> Tutor: <strong>{{ batch.tutor_user.username if batch.tutor_user else 'Unknown' }}</strong></span>
+                            <span style="color: var(--text-muted); margin-left: 1rem;"><i class="bi bi-clock"></i> {{ batch.scheduled_time }}</span>
+                        </div>
+                    </div>
+
+                    {% if not batch.is_joined %}
+                    {% if batch.member_count < batch.max_students %}
+                    <form method="POST" action="/student/batch/{{ batch.id }}/join" style="margin: 0;">
+                        <button type="submit" class="btn-mm btn-mm-primary btn-mm-sm" onclick="return confirm('Join this batch?')">
+                            <i class="bi bi-plus-circle"></i> Join Batch
+                        </button>
+                    </form>
+                    {% else %}
+                    <span class="mm-badge mm-badge-warning">Full</span>
+                    {% endif %}
+                    {% endif %}
+                </div>
+
+                <!-- Show sessions only for joined batches -->
+                {% if batch.is_joined and batch.sessions %}
+                <div class="mm-table-wrapper">
+                    <table class="mm-table">
+                        <thead>
+                            <tr>
+                                <th>Session</th>
+                                <th>Video</th>
+                                <th>Materials</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for session in batch.sessions %}
+                            <tr>
+                                <td>
+                                    <strong>{{ session.title }}</strong>
+                                    {% if session.description %}<br><small style="color: var(--text-muted);">{{ session.description }}</small>{% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ session.video_url }}" target="_blank" class="mm-recording-link">
+                                        <i class="bi bi-play-circle"></i> Watch
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if session.material_list %}
+                                    {% for mat in session.material_list %}
+                                    <a href="{{ mat.file_url }}" target="_blank" style="display:inline-block; margin: 2px;">
+                                        <span class="mm-badge mm-badge-accent">{{ mat.file_type }}</span>
+                                    </a>
+                                    {% endfor %}
+                                    {% else %}
+                                    <small style="color: var(--text-muted);">None</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% elif batch.is_joined %}
+                <div style="text-align: center; padding: 1rem; color: var(--text-muted); font-size: 0.9rem;">
+                    <i class="bi bi-camera-video"></i> No sessions posted yet — check back later.
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="mm-card">
+                <div class="mm-empty-state">
+                    <div class="icon"><i class="bi bi-collection"></i></div>
+                    <h4>No batches available</h4>
+                    <p>No tutors have created batches yet. Check back later!</p>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </main>
 </div>

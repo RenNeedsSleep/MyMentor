@@ -26,6 +26,9 @@
             <a href="#section-recordings" class="mm-sidebar-link" onclick="showTab('recordings')">
                 <span class="icon"><i class="bi bi-play-circle"></i></span> Recordings
             </a>
+            <a href="#section-batches" class="mm-sidebar-link" onclick="showTab('batches')">
+                <span class="icon"><i class="bi bi-collection"></i></span> Batches
+            </a>
             <a href="/messages" class="mm-sidebar-link">
                 <span class="icon"><i class="bi bi-chat-dots"></i></span> Messages
                 {% if unread_count %}<span class="mm-notif-dot">{{ unread_count }}</span>{% endif %}
@@ -305,6 +308,155 @@
                 </div>
                 {% endif %}
             </div>
+        </div>
+
+        <!-- BATCHES TAB -->
+        <div id="tab-batches" class="mm-tab-content">
+            <div class="mm-page-header">
+                <h1>My Batches</h1>
+                <p>Create and manage class batches, video sessions, and study materials</p>
+            </div>
+
+            <!-- Create Batch Form -->
+            <div class="mm-card" style="margin-bottom: 1.5rem;">
+                <div class="mm-card-header">
+                    <h3><i class="bi bi-plus-circle"></i> Create New Batch</h3>
+                </div>
+                <form method="POST" action="/tutor/batch/create">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="mm-form-group">
+                            <label for="batch_name">Batch Name</label>
+                            <input type="text" class="mm-form-control" id="batch_name" name="name" placeholder="e.g., Physics Batch A" required>
+                        </div>
+                        <div class="mm-form-group">
+                            <label for="scheduled_time">Scheduled Time</label>
+                            <input type="datetime-local" class="mm-form-control" id="scheduled_time" name="scheduled_time" required>
+                        </div>
+                    </div>
+                    <div class="mm-form-group">
+                        <label for="batch_desc">Description</label>
+                        <textarea class="mm-form-control" id="batch_desc" name="description" rows="2" placeholder="Brief description of this batch..."></textarea>
+                    </div>
+                    <div style="display: flex; align-items: end; gap: 1rem;">
+                        <div class="mm-form-group" style="flex: 0 0 150px;">
+                            <label for="max_students">Max Students</label>
+                            <input type="number" class="mm-form-control" id="max_students" name="max_students" value="30" min="1" max="200">
+                        </div>
+                        <button type="submit" class="btn-mm btn-mm-primary btn-mm-sm" style="margin-bottom: 1rem;">Create Batch</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- List of Batches -->
+            {% if tutor_batches %}
+            {% for batch in tutor_batches %}
+            <div class="mm-card" style="margin-bottom: 1.5rem;">
+                <div class="mm-card-header">
+                    <h3>{{ batch.name }}</h3>
+                    <div>
+                        <span class="mm-badge mm-badge-primary">{{ batch.member_count }}/{{ batch.max_students }} students</span>
+                        <span class="mm-badge mm-badge-warning" style="margin-left: 0.5rem;">{{ batch.scheduled_time }}</span>
+                    </div>
+                </div>
+                {% if batch.description %}
+                <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">{{ batch.description }}</p>
+                {% endif %}
+
+                <!-- Add Session Form -->
+                <details style="margin-bottom: 1rem;">
+                    <summary style="cursor: pointer; color: var(--primary); font-weight: 500; margin-bottom: 0.5rem;">
+                        <i class="bi bi-plus-lg"></i> Add Video Session
+                    </summary>
+                    <form method="POST" action="/tutor/batch/{{ batch.id }}/add-session" style="padding: 1rem; background: var(--bg-secondary, #f8f9fa); border-radius: 8px; margin-top: 0.5rem;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div class="mm-form-group">
+                                <label>Session Title</label>
+                                <input type="text" class="mm-form-control" name="title" placeholder="e.g., Lecture 1 - Newton's Laws" required>
+                            </div>
+                            <div class="mm-form-group">
+                                <label>Video URL</label>
+                                <input type="url" class="mm-form-control" name="video_url" placeholder="https://youtube.com/watch?v=..." required>
+                            </div>
+                        </div>
+                        <div class="mm-form-group">
+                            <label>Description (optional)</label>
+                            <input type="text" class="mm-form-control" name="description" placeholder="Brief session description">
+                        </div>
+                        <button type="submit" class="btn-mm btn-mm-primary btn-mm-sm">Add Session</button>
+                    </form>
+                </details>
+
+                <!-- Sessions List -->
+                {% if batch.sessions %}
+                <div class="mm-table-wrapper">
+                    <table class="mm-table">
+                        <thead>
+                            <tr>
+                                <th>Session</th>
+                                <th>Video</th>
+                                <th>Materials</th>
+                                <th>Add Material</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for session in batch.sessions %}
+                            <tr>
+                                <td>
+                                    <strong>{{ session.title }}</strong>
+                                    {% if session.description %}<br><small style="color: var(--text-muted);">{{ session.description }}</small>{% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ session.video_url }}" target="_blank" class="mm-recording-link">
+                                        <i class="bi bi-play-circle"></i> Watch
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if session.material_list %}
+                                    {% for mat in session.material_list %}
+                                    <a href="{{ mat.file_url }}" target="_blank" style="display:inline-block; margin: 2px;">
+                                        <span class="mm-badge mm-badge-accent">{{ mat.file_type }}</span>
+                                    </a>
+                                    {% endfor %}
+                                    {% else %}
+                                    <small style="color: var(--text-muted);">None</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form method="POST" action="/tutor/session/{{ session.id }}/upload-material" class="mm-inline-form">
+                                        <div class="mm-form-group" style="flex:1;">
+                                            <input type="url" class="mm-form-control" name="file_url" placeholder="Material URL..." required style="font-size: 0.8rem;">
+                                        </div>
+                                        <select name="file_type" class="mm-form-control" style="width: 80px; font-size: 0.8rem;">
+                                            <option value="pdf">PDF</option>
+                                            <option value="doc">DOC</option>
+                                            <option value="ppt">PPT</option>
+                                            <option value="img">IMG</option>
+                                            <option value="other">Other</option>
+                                        </select>
+                                        <button type="submit" class="btn-mm btn-mm-primary btn-mm-sm">Upload</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div style="text-align: center; padding: 1rem; color: var(--text-muted); font-size: 0.9rem;">
+                    <i class="bi bi-camera-video"></i> No sessions yet — add one above.
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="mm-card">
+                <div class="mm-empty-state">
+                    <div class="icon"><i class="bi bi-collection"></i></div>
+                    <h4>No batches yet</h4>
+                    <p>Create your first batch above to start organizing classes.</p>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </main>
 </div>

@@ -17,6 +17,7 @@ from models import User, TutorProfile, AvailabilitySlot, Booking, Recording, Mes
 from models import Batch, BatchMember, VideoSession, SessionMaterial  # new models for table creation
 from auth import hash_password, verify_password, create_access_token, decode_access_token
 from services.messaging_access import check_batch_relationship
+from services.batch_service import get_member_count
 from routers.batch_router import batch_router
 from routers.session_router import session_router
 
@@ -182,13 +183,23 @@ async def tutor_dashboard(request: Request, db: Session = Depends(get_db)):
         Message.is_read == False
     ).scalar()
 
+    # --- Fetch tutor's batches for the Batches tab ---
+    tutor_batches = db.query(Batch).filter(Batch.tutor_id == user.id).order_by(Batch.created_at.desc()).all()
+    # Enrich batches with member count and sessions
+    for b in tutor_batches:
+        b.member_count = get_member_count(db, b.id)
+        b.sessions = db.query(VideoSession).filter(VideoSession.batch_id == b.id).order_by(VideoSession.created_at.desc()).all()
+        for s in b.sessions:
+            s.material_list = db.query(SessionMaterial).filter(SessionMaterial.session_id == s.id).all()
+
     return templates.TemplateResponse("tutor_dashboard.html", {
         "request": request,
         "user": user,
         "profile": profile,
         "slots": slots,
         "bookings": bookings,
-        "unread_count": unread_count
+        "unread_count": unread_count,
+        "tutor_batches": tutor_batches
     })
 
 
@@ -351,12 +362,160 @@ async def student_dashboard(request: Request, db: Session = Depends(get_db)):
         Message.is_read == False
     ).scalar()
 
+    # --- Fetch batch data for the Batches tab ---
+    all_batches = db.query(Batch).order_by(Batch.created_at.desc()).all()
+    joined_batch_ids = set()
+    student_memberships = db.query(BatchMember).filter(BatchMember.student_id == user.id).all()
+    for m in student_memberships:
+        joined_batch_ids.add(m.batch_id)
+
+    # Enrich batches
+    for b in all_batches:
+        b.member_count = get_member_count(db, b.id)
+        b.tutor_user = db.query(User).filter(User.id == b.tutor_id).first()
+        b.is_joined = b.id in joined_batch_ids
+        if b.is_joined:
+            b.sessions = db.query(VideoSession).filter(VideoSession.batch_id == b.id).order_by(VideoSession.created_at.desc()).all()
+            for s in b.sessions:
+                s.material_list = db.query(SessionMaterial).filter(SessionMaterial.session_id == s.id).all()
+        else:
+            b.sessions = []
+
     return templates.TemplateResponse("student_dashboard.html", {
         "request": request,
         "user": user,
         "bookings": bookings,
-        "unread_count": unread_count
+        "unread_count": unread_count,
+        "all_batches": all_batches,
+        "joined_batch_ids": joined_batch_ids
     })
+
+
+# =============================================================================
+# BATCH HTML FORM ROUTES (server-side rendering, same pattern as existing)
+# =============================================================================
+
+@app.post("/tutor/batch/create")
+async def create_batch_form(
+    request: Request,
+    name: str = Form(...),
+    description: str = Form(""),
+    scheduled_time: str = Form(...),
+    max_students: int = Form(30),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or user.role != "tutor":
+        return RedirectResponse(url="/login", status_code=302)
+
+    batch = Batch(
+        name=name,
+        description=description,
+        scheduled_time=scheduled_time,
+        max_students=max_students,
+        tutor_id=user.id,
+        created_at=datetime.utcnow()
+    )
+    db.add(batch)
+    db.commit()
+    return RedirectResponse(url="/tutor/dashboard#section-batches", status_code=302)
+
+
+@app.post("/student/batch/{batch_id}/join")
+async def join_batch_form(
+    batch_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or user.role != "student":
+        return RedirectResponse(url="/login", status_code=302)
+
+    batch = db.query(Batch).filter(Batch.id == batch_id).first()
+    if not batch:
+        return RedirectResponse(url="/student/dashboard", status_code=302)
+
+    # Check duplicate
+    existing = db.query(BatchMember).filter(
+        BatchMember.batch_id == batch_id,
+        BatchMember.student_id == user.id
+    ).first()
+    if existing:
+        return RedirectResponse(url="/student/dashboard#section-batches", status_code=302)
+
+    # Check capacity
+    current_count = get_member_count(db, batch_id)
+    if current_count >= batch.max_students:
+        return RedirectResponse(url="/student/dashboard#section-batches", status_code=302)
+
+    member = BatchMember(
+        batch_id=batch_id,
+        student_id=user.id,
+        joined_at=datetime.utcnow()
+    )
+    db.add(member)
+    db.commit()
+    return RedirectResponse(url="/student/dashboard#section-batches", status_code=302)
+
+
+@app.post("/tutor/batch/{batch_id}/add-session")
+async def add_session_form(
+    batch_id: int,
+    request: Request,
+    title: str = Form(...),
+    description: str = Form(""),
+    video_url: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or user.role != "tutor":
+        return RedirectResponse(url="/login", status_code=302)
+
+    batch = db.query(Batch).filter(Batch.id == batch_id, Batch.tutor_id == user.id).first()
+    if not batch:
+        return RedirectResponse(url="/tutor/dashboard", status_code=302)
+
+    session = VideoSession(
+        batch_id=batch_id,
+        title=title,
+        description=description,
+        video_url=video_url,
+        created_at=datetime.utcnow()
+    )
+    db.add(session)
+    db.commit()
+    return RedirectResponse(url="/tutor/dashboard#section-batches", status_code=302)
+
+
+@app.post("/tutor/session/{session_id}/upload-material")
+async def upload_material_form(
+    session_id: int,
+    request: Request,
+    file_url: str = Form(...),
+    file_type: str = Form("pdf"),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or user.role != "tutor":
+        return RedirectResponse(url="/login", status_code=302)
+
+    session_obj = db.query(VideoSession).filter(VideoSession.id == session_id).first()
+    if not session_obj:
+        return RedirectResponse(url="/tutor/dashboard", status_code=302)
+
+    batch = db.query(Batch).filter(Batch.id == session_obj.batch_id, Batch.tutor_id == user.id).first()
+    if not batch:
+        return RedirectResponse(url="/tutor/dashboard", status_code=302)
+
+    material = SessionMaterial(
+        session_id=session_id,
+        file_url=file_url,
+        file_type=file_type,
+        uploaded_at=datetime.utcnow()
+    )
+    db.add(material)
+    db.commit()
+    return RedirectResponse(url="/tutor/dashboard#section-batches", status_code=302)
 
 
 @app.get("/student/search", response_class=HTMLResponse)
