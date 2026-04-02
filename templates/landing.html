@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}MyMentor - Find Your Perfect Tutor{% endblock %}
+
+{% block content %}
+
+<section class="mm-hero">
+    <div class="mm-hero-content">
+        <div class="mm-hero-badge animate-in">Educational Platform</div>
+        <h1 class="animate-in animate-in-delay-1">
+            Learn from the <span class="accent">Best Tutors</span> Near You
+        </h1>
+        <p class="animate-in animate-in-delay-2">
+            MyMentor connects students with qualified tutors based on subject expertise,
+            availability, and your preferred learning mode — online video classes or in-person sessions.
+        </p>
+        <div class="mm-hero-actions animate-in animate-in-delay-3">
+            <a href="/register" class="btn-mm btn-mm-primary btn-mm-lg">Get Started Free</a>
+            <a href="/login" class="btn-mm btn-mm-outline btn-mm-lg">Sign In</a>
+        </div>
+        <div class="mm-hero-stats animate-in animate-in-delay-4">
+            <div class="stat">
+                <div class="stat-number">500+</div>
+                <div class="stat-label">Active Tutors</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">2K+</div>
+                <div class="stat-label">Students</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">50+</div>
+                <div class="stat-label">Subjects</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<section class="mm-features">
+    <h2 class="mm-features-title">Everything You Need to Learn</h2>
+    <p class="mm-features-subtitle">A complete platform for personalized education</p>
+    <div class="mm-features-grid">
+        <div class="mm-feature-card">
+            <div class="feature-icon">
+                <i class="bi bi-search"></i>
+            </div>
+            <h3>Smart Matching</h3>
+            <p>Filter tutors by subject, location, teaching mode, and overlapping availability to find your ideal match.
+            </p>
+        </div>
+        <div class="mm-feature-card">
+            <div class="feature-icon">
+                <i class="bi bi-camera-video"></i>
+            </div>
+            <h3>Live Video Classes</h3>
+            <p>Join group video calls with your tutor and classmates. Real-time chat for instant doubt clearing.</p>
+        </div>
+        <div class="mm-feature-card">
+            <div class="feature-icon">
+                <i class="bi bi-calendar-check"></i>
+            </div>
+            <h3>Easy Scheduling</h3>
+            <p>Tutors set their availability. Students browse and book open slots — no double-booking, guaranteed.</p>
+        </div>
+        <div class="mm-feature-card">
+            <div class="feature-icon">
+                <i class="bi bi-chat-dots"></i>
+            </div>
+            <h3>Direct Messaging</h3>
+            <p>Message your tutor before or after sessions for queries, doubts, or planning your study path.</p>
+        </div>
+        <div class="mm-feature-card">
+            <div class="feature-icon">
+                <i class="bi bi-play-circle"></i>
+            </div>
+            <h3>Session Recordings</h3>
+            <p>Access recorded online sessions anytime for revision. Never miss a concept explained in class.</p>
+        </div>
+        <div class="mm-feature-card">
+            <div class="feature-icon">
+                <i class="bi bi-people"></i>
+            </div>
+            <h3>Group Classes</h3>
+            <p>Multiple students can join the same live session. Learn together in a collaborative classroom
+                environment.</p>
+        </div>
+    </div>
+</section>
+
+
+<section class="mm-wave-section">
+    <h2>Ready to start learning?</h2>
+    <p>Join thousands of students already using MyMentor to connect with expert tutors and achieve their goals.</p>
+    <a href="/register" class="btn-mm btn-mm-lg" style="background:#fff; color:var(--blue); font-weight:700;">Create
+        Free Account</a>
+</section>
+
+
+<footer class="mm-footer">
+    <p>&copy; 2026 MyMentor. Built for better education.</p>
+</footer>
+{% endblock %}

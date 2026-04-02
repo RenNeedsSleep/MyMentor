@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}{{ profile.user.username }} - MyMentor{% endblock %}
+
+{% block nav_links %}
+<a href="/student/dashboard">Dashboard</a>
+<a href="/student/search">Find Tutors</a>
+<a href="/messages">Messages</a>
+<a href="/logout" class="btn-nav-accent">Logout</a>
+{% endblock %}
+
+{% block content %}
+<div class="mm-dashboard">
+    <aside class="mm-sidebar">
+        <div class="mm-sidebar-section">
+            <div class="mm-sidebar-label">Menu</div>
+            <a href="/student/dashboard" class="mm-sidebar-link">
+                <span class="icon"><i class="bi bi-grid"></i></span> Dashboard
+            </a>
+            <a href="/student/search" class="mm-sidebar-link">
+                <span class="icon"><i class="bi bi-search"></i></span> Find Tutors
+            </a>
+            <a href="/messages" class="mm-sidebar-link">
+                <span class="icon"><i class="bi bi-chat-dots"></i></span> Messages
+            </a>
+        </div>
+    </aside>
+
+    <main class="mm-main-content">
+        
+        <div class="mm-card" style="margin-bottom: 1.5rem;">
+            <div style="display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;">
+                <div class="mm-tutor-avatar" style="width: 64px; height: 64px; font-size: 1.6rem; margin-bottom: 0;">
+                    {{ profile.user.username[0]|upper }}
+                </div>
+                <div style="flex: 1;">
+                    <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 0.25rem;">
+                        {{ profile.user.username }}
+                    </h2>
+                    <div class="mm-tutor-meta" style="margin-bottom: 0.5rem;">
+                        {% if profile.subjects %}
+                        {% for subj in profile.subjects.split(',') %}
+                        <span class="mm-badge mm-badge-primary">{{ subj.strip() }}</span>
+                        {% endfor %}
+                        {% endif %}
+                        <span class="mm-badge mm-badge-accent">{{ profile.teaching_mode }}</span>
+                        {% if profile.location %}
+                        <span class="mm-badge mm-badge-warning">{{ profile.location }}</span>
+                        {% endif %}
+                    </div>
+                    {% if profile.qualifications %}
+                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0;">
+                        {{ profile.qualifications }}
+                    </p>
+                    {% endif %}
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <a href="/messages/{{ profile.user.id }}" class="btn-mm btn-mm-outline btn-mm-sm">Message</a>
+                    <a href="/student/search" class="btn-mm btn-mm-outline btn-mm-sm">Back</a>
+                </div>
+            </div>
+        </div>
+
+        
+        <div class="mm-card">
+            <div class="mm-card-header">
+                <h3>Available Time Slots</h3>
+                <span class="mm-badge mm-badge-accent">{{ available_slots|length }} available</span>
+            </div>
+
+            {% if available_slots %}
+            <div class="mm-table-wrapper">
+                <table class="mm-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                            <th>Mode</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for slot in available_slots %}
+                        <tr>
+                            <td><strong>{{ slot.date }}</strong></td>
+                            <td>{{ slot.start_time }}</td>
+                            <td>{{ slot.end_time }}</td>
+                            <td>
+                                {% if profile.teaching_mode == 'both' %}
+                                <div style="display: flex; gap: 6px;">
+                                    <span class="mm-badge mm-badge-primary" style="font-size: 0.7rem;">Online</span>
+                                    <span class="mm-badge mm-badge-warning" style="font-size: 0.7rem;">Offline</span>
+                                </div>
+                                {% elif profile.teaching_mode == 'online' %}
+                                <span class="mm-badge mm-badge-primary">Online</span>
+                                {% else %}
+                                <span class="mm-badge mm-badge-warning">Offline</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="POST" action="/student/book"
+                                    style="display: inline-flex; gap: 6px; align-items: center;">
+                                    <input type="hidden" name="slot_id" value="{{ slot.id }}">
+                                    <input type="hidden" name="tutor_id" value="{{ profile.id }}">
+                                    {% if profile.teaching_mode == 'both' %}
+                                    <select name="mode" class="mm-form-control"
+                                        style="width: auto; padding: 6px 12px; font-size: 0.8rem;">
+                                        <option value="online">Online</option>
+                                        <option value="offline">Offline</option>
+                                    </select>
+                                    {% else %}
+                                    <input type="hidden" name="mode" value="{{ profile.teaching_mode }}">
+                                    {% endif %}
+                                    <button type="submit" class="btn-mm btn-mm-primary btn-mm-sm"
+                                        onclick="return confirm('Book this slot?')">Book Now</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="mm-empty-state">
+                <div class="icon"><i class="bi bi-calendar-x"></i></div>
+                <h4>No available slots</h4>
+                <p>This tutor hasn't added any available time slots yet. Check back later!</p>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+</div>
+{% endblock %}

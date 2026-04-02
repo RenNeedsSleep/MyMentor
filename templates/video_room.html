@@ -1,0 +1,506 @@
+{% extends "base.html" %}
+
+{% block title %}Video Room - MyMentor{% endblock %}
+
+{% block nav_links %}
+<a href="/dashboard">Dashboard</a>
+<a href="/logout" class="btn-nav-accent">Logout</a>
+{% endblock %}
+
+{% block content %}
+<div class="mm-video-room" id="videoRoom">
+    
+    <div class="mm-video-area">
+        <div class="mm-video-grid" id="videoGrid">
+            
+            <div class="mm-video-container active" id="localContainer">
+                <video id="localVideo" autoplay muted playsinline></video>
+                <div class="mm-video-label">You ({{ user.username }})</div>
+                <div class="mm-video-placeholder" id="localPlaceholder">
+                    <div class="icon"><i class="bi bi-camera-video-off"></i></div>
+                    <div>Starting camera...</div>
+                </div>
+                <div class="mm-participant-count" id="participantCount">1</div>
+            </div>
+        </div>
+
+        
+        <div class="mm-video-strip" id="peerStrip" style="display: none;"></div>
+
+        
+        <div class="mm-video-controls">
+            <button class="mm-control-btn active" id="btnMic" title="Toggle Microphone" onclick="toggleMic()">
+                <i class="bi bi-mic-fill"></i>
+            </button>
+            <button class="mm-control-btn active" id="btnCam" title="Toggle Camera" onclick="toggleCam()">
+                <i class="bi bi-camera-video-fill"></i>
+            </button>
+            <button class="mm-control-btn active" id="btnScreen" title="Share Screen" onclick="toggleScreen()">
+                <i class="bi bi-display"></i>
+            </button>
+            <button class="mm-control-btn danger" id="btnLeave" title="Leave Room" onclick="leaveRoom()">
+                <i class="bi bi-telephone-x-fill"></i>
+            </button>
+        </div>
+    </div>
+
+    
+    <div class="mm-chat-panel">
+        <div class="mm-chat-header">
+            Live Chat
+            <span style="margin-left: auto; font-size: 0.72rem; opacity: 0.5;">Room: {{ room_id }}</span>
+        </div>
+
+        <div class="mm-chat-messages" id="chatMessages">
+            <div class="mm-chat-msg received" style="background: rgba(51,102,255,0.15); color: #93B4FF;">
+                <div class="sender">System</div>
+                You've joined room <strong>{{ room_id }}</strong>
+            </div>
+        </div>
+
+        <div class="mm-chat-input-area">
+            <input type="text" class="mm-chat-input" id="chatInput" placeholder="Type a message..."
+                onkeypress="if(event.key==='Enter') sendChat()">
+            <button class="mm-chat-send-btn" onclick="sendChat()">
+                <i class="bi bi-send-fill"></i>
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+
+
+
+
+    const ROOM_ID = "{{ room_id }}";
+    const USERNAME = "{{ user.username }}";
+    const USER_ROLE = "{{ user.role }}";
+    const WS_PROTOCOL = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const WS_URL = `${WS_PROTOCOL}//${location.host}/ws/${ROOM_ID}?username=${encodeURIComponent(USERNAME)}&role=${USER_ROLE}`;
+
+    let localStream = null;
+    let screenStream = null;
+    let ws = null;
+    let myPeerId = null;
+    let micEnabled = true;
+    let camEnabled = true;
+    let screenSharing = false;
+
+
+    const peers = new Map();
+
+    const ICE_SERVERS = {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+    };
+
+
+
+    async function init() {
+        try {
+            const isTutor = USER_ROLE === 'tutor';
+            const constraints = {
+                video: isTutor ? { width: 1280, height: 720 } : false,
+                audio: true
+            };
+            localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+            const localVideo = document.getElementById('localVideo');
+            const localContainer = document.getElementById('localContainer');
+
+            if (isTutor) {
+                localVideo.srcObject = localStream;
+                document.getElementById('localPlaceholder').style.display = 'none';
+            } else {
+                document.getElementById('localPlaceholder').innerHTML = `
+                    <div class="icon" style="margin-bottom:0px;"><i class="bi bi-mic-fill"></i></div>
+                    <div>Audio Only</div>
+                `;
+                document.getElementById('btnCam').style.display = 'none';
+                document.getElementById('btnScreen').style.display = 'none';
+                
+
+                const strip = document.getElementById('peerStrip');
+                strip.style.display = 'flex';
+                strip.appendChild(localContainer);
+                localContainer.style.flexDirection = 'column';
+                localContainer.style.minWidth = '120px';
+                localContainer.style.maxWidth = '160px';
+                
+
+                const label = localContainer.querySelector('.mm-video-label');
+                if (label) {
+                    label.style.position = 'static';
+                    label.style.background = 'none';
+                    label.style.padding = '0';
+                    label.style.marginTop = '10px';
+                }
+                localVideo.style.display = 'none';
+            }
+
+            connectWebSocket();
+        } catch (err) {
+            console.error('Error accessing media devices:', err);
+            document.getElementById('localPlaceholder').innerHTML = `
+                <div class="icon"><i class="bi bi-exclamation-triangle"></i></div>
+                <div>Camera/Mic access denied</div>
+                <div style="font-size: 0.75rem; margin-top: 4px; opacity: 0.6;">
+                    Please allow camera and microphone access
+                </div>
+            `;
+        }
+    }
+
+
+
+    function connectWebSocket() {
+        ws = new WebSocket(WS_URL);
+
+        ws.onopen = () => {
+            console.log('WebSocket connected');
+            addSystemMessage('Connected to signaling server');
+        };
+
+        ws.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
+
+            switch (data.type) {
+                case 'room-state':
+                    myPeerId = data.your_peer_id;
+                    console.log('My peer ID:', myPeerId);
+
+                    for (const peer of data.peers) {
+                        await createPeerConnection(peer.peer_id, peer.username, peer.role, true);
+                    }
+                    updateParticipantCount();
+                    break;
+
+                case 'peer-joined':
+                    addSystemMessage(`${data.username} joined the room`);
+
+                    updateParticipantCount();
+                    break;
+
+                case 'offer':
+                    if (!peers.has(data.sender_id)) {
+                        await createPeerConnection(data.sender_id, 'Peer', 'student', false);
+                    }
+                    const peerOffer = peers.get(data.sender_id);
+                    await peerOffer.pc.setRemoteDescription(
+                        new RTCSessionDescription({ type: 'offer', sdp: data.sdp })
+                    );
+                    const answer = await peerOffer.pc.createAnswer();
+                    await peerOffer.pc.setLocalDescription(answer);
+                    ws.send(JSON.stringify({
+                        type: 'answer',
+                        sdp: answer.sdp,
+                        target_id: data.sender_id
+                    }));
+                    break;
+
+                case 'answer':
+                    const peerAnswer = peers.get(data.sender_id);
+                    if (peerAnswer) {
+                        await peerAnswer.pc.setRemoteDescription(
+                            new RTCSessionDescription({ type: 'answer', sdp: data.sdp })
+                        );
+                    }
+                    break;
+
+                case 'ice-candidate':
+                    const peerIce = peers.get(data.sender_id);
+                    if (peerIce && data.candidate) {
+                        await peerIce.pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    }
+                    break;
+
+                case 'chat':
+                    addChatMessage(data.sender, data.message, 'received');
+                    break;
+
+                case 'peer-left':
+                    addSystemMessage(`${data.username} left the room`);
+                    removePeer(data.peer_id);
+                    updateParticipantCount();
+                    break;
+            }
+        };
+
+        ws.onclose = () => {
+            addSystemMessage('Disconnected from server');
+        };
+
+        ws.onerror = (err) => {
+            console.error('WebSocket error:', err);
+        };
+    }
+
+
+
+    async function createPeerConnection(peerId, peerUsername, peerRole, isInitiator) {
+        const pc = new RTCPeerConnection(ICE_SERVERS);
+
+
+        if (localStream) {
+            localStream.getTracks().forEach(track => {
+                pc.addTrack(track, localStream);
+            });
+        }
+
+
+        const container = createVideoContainer(peerId, peerUsername, peerRole);
+
+
+        pc.ontrack = (event) => {
+            const video = container.querySelector('video');
+            video.srcObject = event.streams[0];
+            if (peerRole === 'tutor') {
+                const placeholder = container.querySelector('.mm-video-placeholder');
+                if (placeholder) placeholder.style.display = 'none';
+            }
+            container.classList.add('active');
+        };
+
+
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                ws.send(JSON.stringify({
+                    type: 'ice-candidate',
+                    candidate: event.candidate,
+                    target_id: peerId
+                }));
+            }
+        };
+
+        pc.onconnectionstatechange = () => {
+            console.log(`Connection to ${peerId}: ${pc.connectionState}`);
+            if (pc.connectionState === 'connected') {
+                addSystemMessage(`Connected to ${peerUsername}`);
+            }
+        };
+
+        peers.set(peerId, { pc, username: peerUsername, role: peerRole, container });
+
+
+        if (isInitiator) {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            ws.send(JSON.stringify({
+                type: 'offer',
+                sdp: offer.sdp,
+                target_id: peerId
+            }));
+        }
+
+        return pc;
+    }
+
+    function createVideoContainer(peerId, peerUsername, peerRole) {
+        const strip = document.getElementById('peerStrip');
+        const grid = document.getElementById('videoGrid');
+        
+        const container = document.createElement('div');
+        container.className = 'mm-video-container active';
+        container.id = `peer-${peerId}`;
+
+        if (peerRole === 'tutor') {
+            container.innerHTML = `
+                <video autoplay playsinline></video>
+                <div class="mm-video-label">${escapeHtml(peerUsername)} (Tutor)</div>
+                <div class="mm-video-placeholder">
+                    <div class="icon"><i class="bi bi-person"></i></div>
+                    <div>Connecting...</div>
+                </div>
+            `;
+            container.classList.add('main-video');
+            if (USER_ROLE === 'student') {
+                grid.appendChild(container);
+            } else {
+                strip.appendChild(container);
+                strip.style.display = 'flex';
+            }
+        } else {
+            container.innerHTML = `
+                <video autoplay playsinline style="display:none;"></video>
+                <div class="mm-video-label" style="position:static; background:none; padding:0; margin-top:10px;">${escapeHtml(peerUsername)}</div>
+                <div class="mm-video-placeholder" style="display:flex; flex-direction:column; align-items:center;">
+                    <div class="icon" style="margin-bottom:0;"><i class="bi bi-mic-fill"></i></div>
+                    <div style="font-size:0.75rem;">Student</div>
+                </div>
+            `;
+            container.style.flexDirection = 'column';
+            container.style.minWidth = '120px';
+            container.style.maxWidth = '160px';
+            strip.appendChild(container);
+            strip.style.display = 'flex';
+        }
+
+        return container;
+    }
+
+    function removePeer(peerId) {
+        const peerData = peers.get(peerId);
+        if (peerData) {
+            peerData.pc.close();
+            if (peerData.container) {
+                peerData.container.remove();
+            }
+            peers.delete(peerId);
+        }
+
+
+        if (peers.size === 0) {
+            document.getElementById('peerStrip').style.display = 'none';
+        }
+    }
+
+    function updateParticipantCount() {
+        const count = peers.size + 1; // +1 for self
+        document.getElementById('participantCount').textContent = count;
+    }
+
+
+
+    function toggleMic() {
+        if (!localStream) return;
+        micEnabled = !micEnabled;
+        localStream.getAudioTracks().forEach(track => track.enabled = micEnabled);
+
+        const btn = document.getElementById('btnMic');
+        btn.classList.toggle('active', micEnabled);
+        btn.innerHTML = micEnabled
+            ? '<i class="bi bi-mic-fill"></i>'
+            : '<i class="bi bi-mic-mute-fill"></i>';
+    }
+
+    function toggleCam() {
+        if (!localStream) return;
+        camEnabled = !camEnabled;
+        localStream.getVideoTracks().forEach(track => track.enabled = camEnabled);
+
+        const btn = document.getElementById('btnCam');
+        btn.classList.toggle('active', camEnabled);
+        btn.innerHTML = camEnabled
+            ? '<i class="bi bi-camera-video-fill"></i>'
+            : '<i class="bi bi-camera-video-off-fill"></i>';
+    }
+
+    async function toggleScreen() {
+        const btn = document.getElementById('btnScreen');
+
+        if (!screenSharing) {
+            try {
+                screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                const screenTrack = screenStream.getVideoTracks()[0];
+
+
+                peers.forEach((peerData) => {
+                    const sender = peerData.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                    if (sender) {
+                        sender.replaceTrack(screenTrack);
+                    }
+                });
+
+
+                document.getElementById('localVideo').srcObject = screenStream;
+
+                screenTrack.onended = () => {
+                    stopScreenShare();
+                };
+
+                screenSharing = true;
+                btn.style.background = 'var(--green)';
+            } catch (err) {
+                console.error('Screen share error:', err);
+            }
+        } else {
+            stopScreenShare();
+        }
+    }
+
+    function stopScreenShare() {
+        if (screenStream) {
+            screenStream.getTracks().forEach(t => t.stop());
+            screenStream = null;
+        }
+
+
+        if (localStream) {
+            const camTrack = localStream.getVideoTracks()[0];
+            peers.forEach((peerData) => {
+                const sender = peerData.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender && camTrack) {
+                    sender.replaceTrack(camTrack);
+                }
+            });
+            document.getElementById('localVideo').srcObject = localStream;
+        }
+
+        screenSharing = false;
+        const btn = document.getElementById('btnScreen');
+        btn.style.background = '';
+    }
+
+    function leaveRoom() {
+        if (confirm('Leave this room?')) {
+            if (localStream) localStream.getTracks().forEach(t => t.stop());
+            if (screenStream) screenStream.getTracks().forEach(t => t.stop());
+            peers.forEach((peerData) => peerData.pc.close());
+            peers.clear();
+            if (ws) ws.close();
+            window.location.href = '/dashboard';
+        }
+    }
+
+
+
+    function sendChat() {
+        const input = document.getElementById('chatInput');
+        const message = input.value.trim();
+        if (!message || !ws) return;
+
+        ws.send(JSON.stringify({
+            type: 'chat',
+            sender: USERNAME,
+            message: message
+        }));
+
+        addChatMessage(USERNAME, message, 'sent');
+        input.value = '';
+    }
+
+    function addChatMessage(sender, message, type) {
+        const container = document.getElementById('chatMessages');
+        const div = document.createElement('div');
+        div.className = `mm-chat-msg ${type}`;
+        div.innerHTML = `<div class="sender">${escapeHtml(sender)}</div>${escapeHtml(message)}`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function addSystemMessage(text) {
+        const container = document.getElementById('chatMessages');
+        const div = document.createElement('div');
+        div.className = 'mm-chat-msg received';
+        div.style.background = 'rgba(51,102,255,0.15)';
+        div.style.color = '#93B4FF';
+        div.innerHTML = `<div class="sender">System</div>${text}`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+
+    init();
+</script>
+{% endblock %}

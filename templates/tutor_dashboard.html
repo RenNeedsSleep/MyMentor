@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+
+{% block title %}Tutor Dashboard - MyMentor{% endblock %}
+
+{% block nav_links %}
+<a href="/tutor/dashboard">Dashboard</a>
+<a href="/messages">Messages{% if unread_count %}<span class="mm-notif-dot">{{ unread_count }}</span>{% endif %}</a>
+<a href="/room/tutor-{{ user.id }}" target="_blank">Video Room</a>
+<a href="/logout" class="btn-nav-accent">Logout</a>
+{% endblock %}
+
+{% block content %}
+<div class="mm-dashboard">
+    <aside class="mm-sidebar">
+        <div class="mm-sidebar-section">
+            <div class="mm-sidebar-label">Menu</div>
+            <a href="#section-profile" class="mm-sidebar-link active" onclick="showTab('profile')">
+                <span class="icon"><i class="bi bi-person"></i></span> My Profile
+            </a>
+            <a href="#section-schedule" class="mm-sidebar-link" onclick="showTab('schedule')">
+                <span class="icon"><i class="bi bi-calendar3"></i></span> Schedule
+            </a>
+            <a href="#section-bookings" class="mm-sidebar-link" onclick="showTab('bookings')">
+                <span class="icon"><i class="bi bi-bookmark"></i></span> Bookings
+            </a>
+            <a href="#section-recordings" class="mm-sidebar-link" onclick="showTab('recordings')">
+                <span class="icon"><i class="bi bi-play-circle"></i></span> Recordings
+            </a>
+            <a href="/messages" class="mm-sidebar-link">
+                <span class="icon"><i class="bi bi-chat-dots"></i></span> Messages
+                {% if unread_count %}<span class="mm-notif-dot">{{ unread_count }}</span>{% endif %}
+            </a>
+        </div>
+        <div class="mm-sidebar-section" style="margin-top: auto;">
+            <div class="mm-sidebar-user">
+                <div class="user-name">{{ user.username }}</div>
+                <div class="user-role">Tutor Account</div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="mm-main-content">
+        
+        <div id="tab-profile" class="mm-tab-content active">
+            <div class="mm-page-header">
+                <h1>My Profile</h1>
+                <p>Update your teaching profile to attract the right students</p>
+            </div>
+
+            <div class="mm-card">
+                <form method="POST" action="/tutor/profile">
+                    <div class="mm-form-group">
+                        <label for="qualifications">Qualifications</label>
+                        <textarea class="mm-form-control" id="qualifications" name="qualifications" rows="3"
+                            placeholder="e.g., M.Sc Mathematics from XYZ University, 5 years teaching experience">{{ profile.qualifications or '' }}</textarea>
+                    </div>
+
+                    <div class="mm-form-group">
+                        <label for="subjects">Subjects (comma-separated)</label>
+                        <input type="text" class="mm-form-control" id="subjects" name="subjects"
+                            placeholder="e.g., Mathematics, Physics, Chemistry" value="{{ profile.subjects or '' }}">
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="mm-form-group">
+                            <label for="teaching_mode">Teaching Mode</label>
+                            <select class="mm-form-control" id="teaching_mode" name="teaching_mode">
+                                <option value="online" {% if profile and profile.teaching_mode=='online' %}selected{%
+                                    endif %}>Online Only</option>
+                                <option value="offline" {% if profile and profile.teaching_mode=='offline' %}selected{%
+                                    endif %}>Offline Only</option>
+                                <option value="both" {% if profile and profile.teaching_mode=='both' %}selected{% endif
+                                    %}>Both</option>
+                            </select>
+                        </div>
+
+                        <div class="mm-form-group">
+                            <label for="location">Location (for offline)</label>
+                            <input type="text" class="mm-form-control" id="location" name="location"
+                                placeholder="e.g., Downtown Library, NYC" value="{{ profile.location or '' }}">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-mm btn-mm-primary">Save Profile</button>
+                </form>
+            </div>
+        </div>
+
+        
+        <div id="tab-schedule" class="mm-tab-content">
+            <div class="mm-page-header">
+                <h1>Manage Schedule</h1>
+                <p>Add available time slots for students to book</p>
+            </div>
+
+            <div class="mm-card" style="margin-bottom: 1.5rem;">
+                <div class="mm-card-header">
+                    <h3>Add New Slot</h3>
+                </div>
+                <form method="POST" action="/tutor/slot" class="mm-inline-form">
+                    <div class="mm-form-group">
+                        <label for="date">Date</label>
+                        <input type="date" class="mm-form-control" id="date" name="date" required>
+                    </div>
+                    <div class="mm-form-group">
+                        <label for="start_time">Start Time</label>
+                        <input type="time" class="mm-form-control" id="start_time" name="start_time" required>
+                    </div>
+                    <div class="mm-form-group">
+                        <label for="end_time">End Time</label>
+                        <input type="time" class="mm-form-control" id="end_time" name="end_time" required>
+                    </div>
+                    <button type="submit" class="btn-mm btn-mm-primary btn-mm-sm">Add Slot</button>
+                </form>
+            </div>
+
+            <div class="mm-card">
+                <div class="mm-card-header">
+                    <h3>Your Availability</h3>
+                    <span class="mm-badge mm-badge-primary">{{ slots|length }} slots</span>
+                </div>
+
+                {% if slots %}
+                <div class="mm-table-wrapper">
+                    <table class="mm-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Start Time</th>
+                                <th>End Time</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for slot in slots %}
+                            <tr>
+                                <td><strong>{{ slot.date }}</strong></td>
+                                <td>{{ slot.start_time }}</td>
+                                <td>{{ slot.end_time }}</td>
+                                <td>
+                                    {% if slot.is_booked %}
+                                    <span class="status-dot booked">Booked</span>
+                                    {% else %}
+                                    <span class="status-dot available">Available</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if not slot.is_booked %}
+                                    <form method="POST" action="/tutor/slot/delete/{{ slot.id }}"
+                                        style="display:inline;">
+                                        <button type="submit" class="btn-mm btn-mm-danger btn-mm-sm"
+                                            onclick="return confirm('Delete this slot?')">Delete</button>
+                                    </form>
+                                    {% else %}
+                                    <span class="mm-badge mm-badge-warning">Locked</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="mm-empty-state">
+                    <div class="icon"><i class="bi bi-calendar-plus"></i></div>
+                    <h4>No slots yet</h4>
+                    <p>Add your available time slots above so students can book sessions with you.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        
+        <div id="tab-bookings" class="mm-tab-content">
+            <div class="mm-page-header">
+                <h1>My Bookings</h1>
+                <p>Manage your upcoming and completed sessions</p>
+            </div>
+
+            <div class="mm-card">
+                {% if bookings %}
+                <div class="mm-table-wrapper">
+                    <table class="mm-table">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Mode</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for booking in bookings %}
+                            <tr>
+                                <td><strong>{{ booking.student.username }}</strong></td>
+                                <td>{{ booking.slot.date }}</td>
+                                <td>{{ booking.slot.start_time }} - {{ booking.slot.end_time }}</td>
+                                <td>
+                                    <span
+                                        class="mm-badge {% if booking.mode == 'online' %}mm-badge-primary{% else %}mm-badge-warning{% endif %}">
+                                        {{ booking.mode }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span
+                                        class="status-dot {% if booking.status == 'completed' %}completed{% else %}available{% endif %}">
+                                        {{ booking.status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if booking.status == 'scheduled' %}
+                                    {% if booking.mode == 'online' %}
+                                    <a href="/room/booking-{{ booking.id }}" target="_blank"
+                                        class="btn-mm btn-mm-primary btn-mm-sm">Start</a>
+                                    {% endif %}
+                                    <form method="POST" action="/tutor/booking/{{ booking.id }}/complete"
+                                        style="display:inline;">
+                                        <button type="submit" class="btn-mm btn-mm-accent btn-mm-sm">Complete</button>
+                                    </form>
+                                    {% else %}
+                                    <span class="mm-badge mm-badge-accent">Done</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="mm-empty-state">
+                    <div class="icon"><i class="bi bi-bookmark"></i></div>
+                    <h4>No bookings yet</h4>
+                    <p>When students book your slots, they will appear here.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        
+        <div id="tab-recordings" class="mm-tab-content">
+            <div class="mm-page-header">
+                <h1>Session Recordings</h1>
+                <p>Add recording links for completed online sessions</p>
+            </div>
+
+            <div class="mm-card">
+                {% set completed_online = [] %}
+                {% for booking in bookings %}
+                {% if booking.status == 'completed' and booking.mode == 'online' %}
+                {% if completed_online.append(booking) %}{% endif %}
+                {% endif %}
+                {% endfor %}
+
+                {% if completed_online %}
+                <div class="mm-table-wrapper">
+                    <table class="mm-table">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Session Date</th>
+                                <th>Recording</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for booking in completed_online %}
+                            <tr>
+                                <td><strong>{{ booking.student.username }}</strong></td>
+                                <td>{{ booking.slot.date }} ({{ booking.slot.start_time }})</td>
+                                <td>
+                                    {% if booking.recording %}
+                                    <a href="{{ booking.recording.video_link }}" target="_blank"
+                                        class="mm-recording-link">
+                                        View Recording
+                                    </a>
+                                    {% else %}
+                                    <span style="color: var(--text-muted); font-size: 0.85rem;">No recording</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form method="POST" action="/tutor/recording" class="mm-inline-form">
+                                        <input type="hidden" name="booking_id" value="{{ booking.id }}">
+                                        <div class="mm-form-group" style="flex:1;">
+                                            <input type="url" class="mm-form-control" name="video_link"
+                                                placeholder="Paste recording URL..."
+                                                value="{{ booking.recording.video_link if booking.recording else '' }}"
+                                                required>
+                                        </div>
+                                        <button type="submit" class="btn-mm btn-mm-primary btn-mm-sm">Save</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="mm-empty-state">
+                    <div class="icon"><i class="bi bi-film"></i></div>
+                    <h4>No completed online sessions</h4>
+                    <p>Complete an online session to add a recording link for the student.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function showTab(tabName) {
+        document.querySelectorAll('.mm-tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.mm-sidebar-link').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-' + tabName).classList.add('active');
+        event.currentTarget.classList.add('active');
+    }
+
+    const dateInput = document.getElementById('date');
+    if (dateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.setAttribute('min', today);
+    }
+</script>
+{% endblock %}

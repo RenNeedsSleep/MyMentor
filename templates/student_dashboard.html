@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}Student Dashboard - MyMentor{% endblock %}
+
+{% block nav_links %}
+<a href="/student/dashboard">Dashboard</a>
+<a href="/student/search">Find Tutors</a>
+<a href="/messages">Messages{% if unread_count %}<span class="mm-notif-dot">{{ unread_count }}</span>{% endif %}</a>
+<a href="/logout" class="btn-nav-accent">Logout</a>
+{% endblock %}
+
+{% block content %}
+<div class="mm-dashboard">
+    <aside class="mm-sidebar">
+        <div class="mm-sidebar-section">
+            <div class="mm-sidebar-label">Menu</div>
+            <a href="#" class="mm-sidebar-link active" onclick="showTab('upcoming')">
+                <span class="icon"><i class="bi bi-calendar-event"></i></span> Upcoming Classes
+            </a>
+            <a href="#" class="mm-sidebar-link" onclick="showTab('recordings')">
+                <span class="icon"><i class="bi bi-play-circle"></i></span> My Recordings
+            </a>
+            <a href="/student/search" class="mm-sidebar-link">
+                <span class="icon"><i class="bi bi-search"></i></span> Find a Tutor
+            </a>
+            <a href="/messages" class="mm-sidebar-link">
+                <span class="icon"><i class="bi bi-chat-dots"></i></span> Messages
+                {% if unread_count %}<span class="mm-notif-dot">{{ unread_count }}</span>{% endif %}
+            </a>
+        </div>
+        <div class="mm-sidebar-section" style="margin-top: auto;">
+            <div class="mm-sidebar-user">
+                <div class="user-name">{{ user.username }}</div>
+                <div class="user-role">Student Account</div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="mm-main-content">
+        
+        <div style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+            <a href="/student/search" class="btn-mm btn-mm-primary">Find a Tutor</a>
+            <a href="/student/search?mode=online" class="btn-mm btn-mm-outline">Online Tutors</a>
+            <a href="/student/search?mode=offline" class="btn-mm btn-mm-outline">Nearby Tutors</a>
+        </div>
+
+        
+        <div id="tab-upcoming" class="mm-tab-content active">
+            <div class="mm-page-header">
+                <h1>My Classes</h1>
+                <p>Your upcoming and past sessions</p>
+            </div>
+
+            <div class="mm-card">
+                {% set scheduled = [] %}
+                {% set completed = [] %}
+                {% for b in bookings %}
+                {% if b.status == 'scheduled' %}
+                {% if scheduled.append(b) %}{% endif %}
+                {% else %}
+                {% if completed.append(b) %}{% endif %}
+                {% endif %}
+                {% endfor %}
+
+                {% if scheduled %}
+                <div class="mm-card-section">
+                    <h3>Upcoming Sessions</h3>
+                    <div class="mm-table-wrapper">
+                        <table class="mm-table">
+                            <thead>
+                                <tr>
+                                    <th>Tutor</th>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Mode</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for booking in scheduled %}
+                                <tr>
+                                    <td><strong>{{ booking.tutor.user.username }}</strong></td>
+                                    <td>{{ booking.slot.date }}</td>
+                                    <td>{{ booking.slot.start_time }} - {{ booking.slot.end_time }}</td>
+                                    <td>
+                                        <span
+                                            class="mm-badge {% if booking.mode == 'online' %}mm-badge-primary{% else %}mm-badge-warning{% endif %}">
+                                            {{ booking.mode }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if booking.mode == 'online' %}
+                                        <a href="/room/booking-{{ booking.id }}" target="_blank"
+                                            class="btn-mm btn-mm-primary btn-mm-sm">Join Class</a>
+                                        {% else %}
+                                        <span class="mm-badge mm-badge-accent">In-Person</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if completed %}
+                <div class="mm-card-section" style="margin-top: 2rem;">
+                    <h3>Completed Sessions</h3>
+                    <div class="mm-table-wrapper">
+                        <table class="mm-table">
+                            <thead>
+                                <tr>
+                                    <th>Tutor</th>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Mode</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for booking in completed %}
+                                <tr>
+                                    <td><strong>{{ booking.tutor.user.username }}</strong></td>
+                                    <td>{{ booking.slot.date }}</td>
+                                    <td>{{ booking.slot.start_time }} - {{ booking.slot.end_time }}</td>
+                                    <td>
+                                        <span
+                                            class="mm-badge {% if booking.mode == 'online' %}mm-badge-primary{% else %}mm-badge-warning{% endif %}">
+                                            {{ booking.mode }}
+                                        </span>
+                                    </td>
+                                    <td><span class="mm-badge mm-badge-accent">Completed</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if not bookings %}
+                <div class="mm-empty-state">
+                    <div class="icon"><i class="bi bi-calendar-x"></i></div>
+                    <h4>No classes yet</h4>
+                    <p>Find a tutor and book your first session to get started!</p>
+                    <a href="/student/search" class="btn-mm btn-mm-primary" style="margin-top: 1rem;">Find a Tutor</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        
+        <div id="tab-recordings" class="mm-tab-content">
+            <div class="mm-page-header">
+                <h1>My Recordings</h1>
+                <p>Access recorded sessions for revision</p>
+            </div>
+
+            <div class="mm-card">
+                {% set has_recordings = [] %}
+                {% for b in bookings %}
+                {% if b.recording %}
+                {% if has_recordings.append(b) %}{% endif %}
+                {% endif %}
+                {% endfor %}
+
+                {% if has_recordings %}
+                <div class="mm-table-wrapper">
+                    <table class="mm-table">
+                        <thead>
+                            <tr>
+                                <th>Tutor</th>
+                                <th>Session Date</th>
+                                <th>Recording</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for booking in has_recordings %}
+                            <tr>
+                                <td><strong>{{ booking.tutor.user.username }}</strong></td>
+                                <td>{{ booking.slot.date }} ({{ booking.slot.start_time }})</td>
+                                <td>
+                                    <a href="{{ booking.recording.video_link }}" target="_blank"
+                                        class="mm-recording-link">
+                                        Watch Recording
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="mm-empty-state">
+                    <div class="icon"><i class="bi bi-film"></i></div>
+                    <h4>No recordings available</h4>
+                    <p>Recordings will appear here after your tutor uploads them for completed online sessions.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function showTab(tabName) {
+        document.querySelectorAll('.mm-tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.mm-sidebar-link').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-' + tabName).classList.add('active');
+        event.currentTarget.classList.add('active');
+    }
+</script>
+{% endblock %}

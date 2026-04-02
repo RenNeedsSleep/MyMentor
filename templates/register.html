@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Register - MyMentor{% endblock %}
+
+{% block content %}
+<div class="mm-auth-wrapper">
+    <div class="mm-auth-card">
+        <div class="mm-auth-form-inner">
+            <h2>Create your account</h2>
+            <p class="subtitle">Join MyMentor and start learning today</p>
+
+            {% if error %}
+            <div class="mm-alert mm-alert-error">{{ error }}</div>
+            {% endif %}
+
+            <form method="POST" action="/register" id="registerForm">
+                <div class="mm-form-group">
+                    <label for="username">Username</label>
+                    <input type="text" class="mm-form-control" id="username" name="username"
+                        placeholder="Choose a username" required>
+                </div>
+
+                <div class="mm-form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" class="mm-form-control" id="email" name="email" placeholder="you@example.com"
+                        required>
+                </div>
+
+                <div class="mm-form-group">
+                    <label for="password">Password</label>
+                    <input type="password" class="mm-form-control" id="password" name="password"
+                        placeholder="Create a strong password" required minlength="6">
+                </div>
+
+                <label style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; display: block;">I want to join
+                    as</label>
+                <div class="mm-role-selector">
+                    <div class="mm-role-option">
+                        <input type="radio" name="role" id="role-student" value="student" checked>
+                        <label for="role-student">
+                            <span class="role-icon"><i class="bi bi-person"></i></span>
+                            <span class="role-name">Student</span>
+                        </label>
+                    </div>
+                    <div class="mm-role-option">
+                        <input type="radio" name="role" id="role-tutor" value="tutor">
+                        <label for="role-tutor">
+                            <span class="role-icon"><i class="bi bi-briefcase"></i></span>
+                            <span class="role-name">Tutor</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-mm btn-mm-primary btn-mm-block" style="margin-top: 0.5rem;">Create
+                    Account</button>
+            </form>
+
+            <p style="text-align: center; margin-top: 1.5rem; font-size: 0.88rem; color: var(--text-secondary);">
+                Already have an account? <a href="/login" style="font-weight: 600;">Sign in</a>
+            </p>
+        </div>
+    </div>
+    <div class="mm-auth-panel">
+        <div class="mm-auth-panel-content">
+            <h3>Start your learning journey</h3>
+            <p>Whether you're a student looking for guidance or a tutor ready to teach, MyMentor has you covered.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Find Tutors - MyMentor{% endblock %}
+
+{% block nav_links %}
+<a href="/student/dashboard">Dashboard</a>
+<a href="/student/search" class="active">Find Tutors</a>
+<a href="/messages">Messages</a>
+<a href="/logout" class="btn-nav-accent">Logout</a>
+{% endblock %}
+
+{% block content %}
+<div class="mm-dashboard">
+    <aside class="mm-sidebar">
+        <div class="mm-sidebar-section">
+            <div class="mm-sidebar-label">Menu</div>
+            <a href="/student/dashboard" class="mm-sidebar-link">
+                <span class="icon"><i class="bi bi-grid"></i></span> Dashboard
+            </a>
+            <a href="/student/search" class="mm-sidebar-link active">
+                <span class="icon"><i class="bi bi-search"></i></span> Find Tutors
+            </a>
+            <a href="/messages" class="mm-sidebar-link">
+                <span class="icon"><i class="bi bi-chat-dots"></i></span> Messages
+            </a>
+        </div>
+    </aside>
+
+    <main class="mm-main-content">
+        <div class="mm-page-header">
+            <h1>Find Your Tutor</h1>
+            <p>Search by subject, mode, and location to find the perfect match</p>
+        </div>
+
+        <form method="GET" action="/student/search" class="mm-search-bar">
+            <div class="mm-form-group">
+                <label for="subject">Subject</label>
+                <input type="text" class="mm-form-control" id="subject" name="subject" placeholder="e.g., Mathematics"
+                    value="{{ subject }}">
+            </div>
+            <div class="mm-form-group">
+                <label for="mode">Teaching Mode</label>
+                <select class="mm-form-control" id="mode" name="mode">
+                    <option value="all" {% if mode=='all' or not mode %}selected{% endif %}>All Modes</option>
+                    <option value="online" {% if mode=='online' %}selected{% endif %}>Online</option>
+                    <option value="offline" {% if mode=='offline' %}selected{% endif %}>Offline</option>
+                </select>
+            </div>
+            <div class="mm-form-group" id="location-group">
+                <label for="location">Location</label>
+                <input type="text" class="mm-form-control" id="location" name="location" placeholder="e.g., NYC"
+                    value="{{ location }}">
+            </div>
+            <button type="submit" class="btn-mm btn-mm-primary btn-mm-sm">Search</button>
+        </form>
+
+        {% if tutors %}
+        <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+            Found <strong>{{ tutors|length }}</strong> tutor{% if tutors|length != 1 %}s{% endif %}
+        </p>
+        <div class="mm-tutor-grid">
+            {% for tutor in tutors %}
+            <div class="mm-tutor-card animate-in" style="animation-delay: {{ loop.index0 * 0.05 }}s; opacity: 0;">
+                <div class="mm-tutor-avatar">
+                    {{ tutor.user.username[0]|upper }}
+                </div>
+                <h4>{{ tutor.user.username }}</h4>
+                <div class="mm-tutor-meta">
+                    {% if tutor.subjects %}
+                    {% for subj in tutor.subjects.split(',')[:3] %}
+                    <span class="mm-badge mm-badge-primary">{{ subj.strip() }}</span>
+                    {% endfor %}
+                    {% endif %}
+                    <span class="mm-badge mm-badge-accent">{{ tutor.teaching_mode }}</span>
+                    {% if tutor.location %}
+                    <span class="mm-badge mm-badge-warning">{{ tutor.location }}</span>
+                    {% endif %}
+                </div>
+                <p class="qualifications">{{ tutor.qualifications or 'No qualifications listed' }}</p>
+                <div class="actions">
+                    {% set available_count = tutor.availability_slots|selectattr('is_booked', 'equalto',
+                    false)|list|length %}
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                        <span style="font-size: 0.8rem; color: var(--text-muted);">
+                            {{ available_count }} slot{{ 's' if available_count != 1 }} available
+                        </span>
+                        <div style="display: flex; gap: 6px;">
+                            <a href="/messages/{{ tutor.user.id }}" class="btn-mm btn-mm-outline btn-mm-sm">Message</a>
+                            <a href="/student/tutor/{{ tutor.id }}" class="btn-mm btn-mm-primary btn-mm-sm">View
+                                Schedule</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="mm-card">
+            <div class="mm-empty-state">
+                <div class="icon"><i class="bi bi-search"></i></div>
+                <h4>No tutors found</h4>
+                <p>Try adjusting your search filters or browse all available tutors.</p>
+                <a href="/student/search" class="btn-mm btn-mm-outline" style="margin-top: 1rem;">Show All Tutors</a>
+            </div>
+        </div>
+        {% endif %}
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const modeSelect = document.getElementById('mode');
+    const locationGroup = document.getElementById('location-group');
+
+    function toggleLocation() {
+        locationGroup.style.display = modeSelect.value === 'online' ? 'none' : 'block';
+    }
+
+    modeSelect.addEventListener('change', toggleLocation);
+    toggleLocation();
+</script>
+{% endblock %}

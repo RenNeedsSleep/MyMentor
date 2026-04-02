@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Login - MyMentor{% endblock %}
+
+{% block content %}
+<div class="mm-auth-wrapper">
+    <div class="mm-auth-card">
+        <div class="mm-auth-form-inner">
+            <h2>Welcome back</h2>
+            <p class="subtitle">Sign in to continue to MyMentor</p>
+
+            {% if error %}
+            <div class="mm-alert mm-alert-error">{{ error }}</div>
+            {% endif %}
+
+            <form method="POST" action="/login" id="loginForm">
+                <div class="mm-form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" class="mm-form-control" id="email" name="email" placeholder="you@example.com"
+                        required>
+                </div>
+
+                <div class="mm-form-group">
+                    <label for="password">Password</label>
+                    <input type="password" class="mm-form-control" id="password" name="password"
+                        placeholder="Enter your password" required>
+                </div>
+
+                <button type="submit" class="btn-mm btn-mm-primary btn-mm-block" style="margin-top: 0.5rem;">Sign
+                    In</button>
+            </form>
+
+            <p style="text-align: center; margin-top: 1.5rem; font-size: 0.88rem; color: var(--text-secondary);">
+                Don't have an account? <a href="/register" style="font-weight: 600;">Create one</a>
+            </p>
+        </div>
+    </div>
+    <div class="mm-auth-panel">
+        <div class="mm-auth-panel-content">
+            <h3>Learn from the best tutors</h3>
+            <p>Join MyMentor to connect with expert tutors, attend live group classes, and access recorded sessions for
+                revision.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
