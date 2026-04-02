@@ -5,7 +5,7 @@
 {% block content %}
 <div class="mm-auth-wrapper">
     <div class="mm-auth-card">
-        <div class="mm-auth-form-inner">
+        <div class="mm-auth-form-inner" style="max-width: 440px;">
             <h2>Create your account</h2>
             <p class="subtitle">Join MyMentor and start learning today</p>
 
@@ -51,6 +51,47 @@
                     </div>
                 </div>
 
+                <!-- Tutor-specific fields (shown only when Tutor is selected) -->
+                <div id="tutorFields" class="mm-tutor-fields">
+                    <div class="mm-tutor-fields-divider">Tutor Details (Optional)</div>
+
+                    <div class="mm-form-group">
+                        <label for="full_name">Full Name</label>
+                        <input type="text" class="mm-form-control" id="full_name" name="full_name"
+                            placeholder="Your full legal name">
+                    </div>
+
+                    <div class="mm-form-group">
+                        <label for="qualifications">Qualifications</label>
+                        <textarea class="mm-form-control" id="qualifications" name="qualifications" rows="2"
+                            placeholder="e.g., M.Sc Mathematics from XYZ University, 5 years teaching"></textarea>
+                    </div>
+
+                    <div class="mm-form-group">
+                        <label for="subjects">Subjects</label>
+                        <input type="text" class="mm-form-control" id="subjects" name="subjects"
+                            placeholder="e.g., Mathematics, Physics, Chemistry">
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="mm-form-group">
+                            <label for="bio">Short Bio</label>
+                            <input type="text" class="mm-form-control" id="bio" name="bio"
+                                placeholder="A brief intro about yourself">
+                        </div>
+                        <div class="mm-form-group">
+                            <label for="experience_years">Experience (years)</label>
+                            <input type="number" class="mm-form-control" id="experience_years" name="experience_years"
+                                placeholder="e.g., 3" min="0">
+                        </div>
+                    </div>
+
+                    <div class="mm-alert mm-alert-success" style="font-size: 0.8rem; margin-bottom: 0.5rem;">
+                        <i class="bi bi-info-circle"></i>
+                        Filling these now completes your profile — you'll be able to create batches and upload sessions right away!
+                    </div>
+                </div>
+
                 <button type="submit" class="btn-mm btn-mm-primary btn-mm-block" style="margin-top: 0.5rem;">Create
                     Account</button>
             </form>
@@ -68,3 +109,23 @@
     </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+<script>
+    // Toggle tutor fields visibility based on role selection
+    const tutorFields = document.getElementById('tutorFields');
+    const roleRadios = document.querySelectorAll('input[name="role"]');
+
+    function toggleTutorFields() {
+        const isTutor = document.getElementById('role-tutor').checked;
+        if (isTutor) {
+            tutorFields.classList.add('visible');
+        } else {
+            tutorFields.classList.remove('visible');
+        }
+    }
+
+    roleRadios.forEach(radio => radio.addEventListener('change', toggleTutorFields));
+    toggleTutorFields();
+</script>
+{% endblock %}

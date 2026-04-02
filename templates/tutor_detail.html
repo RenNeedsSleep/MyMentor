@@ -36,6 +36,12 @@
                 <div style="flex: 1;">
                     <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 0.25rem;">
                         {{ profile.user.username }}
+                        {% if profile.full_name %}
+                        <span class="mm-profile-fullname">({{ profile.full_name }})</span>
+                        {% endif %}
+                        {% if profile.is_profile_complete %}
+                        <i class="bi bi-patch-check-fill" style="color: #059669; font-size: 1.1rem; margin-left: 4px;" title="Verified Profile"></i>
+                        {% endif %}
                     </h2>
                     <div class="mm-tutor-meta" style="margin-bottom: 0.5rem;">
                         {% if profile.subjects %}
@@ -48,9 +54,26 @@
                         <span class="mm-badge mm-badge-warning">{{ profile.location }}</span>
                         {% endif %}
                     </div>
+                    <!-- Trust Indicators -->
+                    <div class="mm-trust-indicators" style="margin-bottom: 0.5rem;">
+                        {% if profile.rating and profile.rating > 0 %}
+                        <span class="mm-trust-item rating"><i class="bi bi-star-fill"></i> {{ '%.1f'|format(profile.rating) }}</span>
+                        {% endif %}
+                        {% if profile.total_students and profile.total_students > 0 %}
+                        <span class="mm-trust-item students"><i class="bi bi-people-fill"></i> {{ profile.total_students }}</span>
+                        {% endif %}
+                        {% if profile.experience_years %}
+                        <span class="mm-trust-item experience"><i class="bi bi-award-fill"></i> {{ profile.experience_years }} years exp</span>
+                        {% endif %}
+                    </div>
                     {% if profile.qualifications %}
                     <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0;">
                         {{ profile.qualifications }}
+                    </p>
+                    {% endif %}
+                    {% if profile.bio %}
+                    <p class="mm-profile-header-bio">
+                        "{{ profile.bio }}"
                     </p>
                     {% endif %}
                 </div>

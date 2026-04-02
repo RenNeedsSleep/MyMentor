@@ -50,21 +50,72 @@
                 <p>Update your teaching profile to attract the right students</p>
             </div>
 
+            <!-- Profile Completion Banner -->
+            {% if profile and profile.is_profile_complete %}
+            <div class="mm-profile-banner mm-profile-banner-success">
+                <span class="banner-icon"><i class="bi bi-check-circle-fill"></i></span>
+                <span class="banner-text">
+                    <strong>Profile Complete!</strong> You can create batches, upload sessions, and appear in student searches.
+                </span>
+            </div>
+            {% else %}
+            <div class="mm-profile-banner mm-profile-banner-warning">
+                <span class="banner-icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                <span class="banner-text">
+                    <strong>Complete your profile</strong> to create batches and upload video sessions.
+                    Fill in your <strong>full name</strong>, <strong>qualifications</strong>, and <strong>subjects</strong>.
+                </span>
+            </div>
+            {% endif %}
+
             <div class="mm-card">
+                <div class="mm-card-header">
+                    <h3><i class="bi bi-person-gear"></i> Profile Details</h3>
+                    {% if profile and profile.is_profile_complete %}
+                    <span class="mm-profile-status mm-profile-status-complete">Verified Profile</span>
+                    {% else %}
+                    <span class="mm-profile-status mm-profile-status-incomplete">Incomplete</span>
+                    {% endif %}
+                </div>
                 <form method="POST" action="/tutor/profile">
-                    <div class="mm-form-group">
-                        <label for="qualifications">Qualifications</label>
-                        <textarea class="mm-form-control" id="qualifications" name="qualifications" rows="3"
-                            placeholder="e.g., M.Sc Mathematics from XYZ University, 5 years teaching experience">{{ profile.qualifications or '' }}</textarea>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="mm-form-group">
+                            <label for="full_name" class="mm-required">Full Name</label>
+                            <input type="text" class="mm-form-control" id="full_name" name="full_name"
+                                placeholder="Your full legal name" value="{{ profile.full_name or '' }}">
+                        </div>
+                        <div class="mm-form-group">
+                            <label for="profile_image_url">Profile Image URL</label>
+                            <input type="url" class="mm-form-control" id="profile_image_url" name="profile_image_url"
+                                placeholder="https://example.com/photo.jpg" value="{{ profile.profile_image_url or '' }}">
+                        </div>
                     </div>
 
                     <div class="mm-form-group">
-                        <label for="subjects">Subjects (comma-separated)</label>
+                        <label for="bio">Bio</label>
+                        <textarea class="mm-form-control" id="bio" name="bio" rows="2"
+                            placeholder="A short description about yourself and your teaching style">{{ profile.bio or '' }}</textarea>
+                    </div>
+
+                    <div class="mm-form-group">
+                        <label for="qualifications" class="mm-required">Qualifications</label>
+                        <textarea class="mm-form-control" id="qualifications" name="qualifications" rows="3"
+                            placeholder="e.g., M.Sc Mathematics from XYZ University, 5 years teaching experience">{{ profile.qualifications or '' }}</textarea>
+                        <small style="color: var(--text-muted); font-size: 0.75rem;">Minimum 3 words required</small>
+                    </div>
+
+                    <div class="mm-form-group">
+                        <label for="subjects" class="mm-required">Subjects (comma-separated)</label>
                         <input type="text" class="mm-form-control" id="subjects" name="subjects"
                             placeholder="e.g., Mathematics, Physics, Chemistry" value="{{ profile.subjects or '' }}">
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                        <div class="mm-form-group">
+                            <label for="experience_years">Experience (years)</label>
+                            <input type="number" class="mm-form-control" id="experience_years" name="experience_years"
+                                placeholder="e.g., 3" min="0" value="{{ profile.experience_years or '' }}">
+                        </div>
                         <div class="mm-form-group">
                             <label for="teaching_mode">Teaching Mode</label>
                             <select class="mm-form-control" id="teaching_mode" name="teaching_mode">
@@ -84,10 +135,31 @@
                         </div>
                     </div>
 
+                    <!-- Trust Indicators (read-only info) -->
+                    {% if profile %}
+                    <div style="display: flex; align-items: center; gap: 20px; padding: 12px 16px; background: var(--bg-gray); border-radius: var(--radius-sm); margin-bottom: 1.25rem;">
+                        <div class="mm-trust-item rating">
+                            <i class="bi bi-star-fill"></i>
+                            <span>{{ '%.1f'|format(profile.rating or 0) }} Rating</span>
+                        </div>
+                        <div class="mm-trust-item students">
+                            <i class="bi bi-people-fill"></i>
+                            <span>{{ profile.total_students or 0 }} Students</span>
+                        </div>
+                        {% if profile.experience_years %}
+                        <div class="mm-trust-item experience">
+                            <i class="bi bi-award-fill"></i>
+                            <span>{{ profile.experience_years }} yr{{ 's' if profile.experience_years != 1 }} exp</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
                     <button type="submit" class="btn-mm btn-mm-primary">Save Profile</button>
                 </form>
             </div>
         </div>
+
 
         
         <div id="tab-schedule" class="mm-tab-content">
@@ -317,8 +389,19 @@
                 <p>Create and manage class batches, video sessions, and study materials</p>
             </div>
 
+            <!-- Profile completeness gate for batch creation -->
+            {% if not profile or not profile.is_profile_complete %}
+            <div class="mm-profile-banner mm-profile-banner-warning" style="margin-bottom: 1.5rem;">
+                <span class="banner-icon"><i class="bi bi-lock-fill"></i></span>
+                <span class="banner-text">
+                    <strong>Profile Incomplete</strong> — You must fill in your full name, qualifications, and subjects before creating batches.
+                    <a href="#section-profile" onclick="showTab('profile')" style="font-weight: 700; color: inherit; text-decoration: underline;">Complete Profile →</a>
+                </span>
+            </div>
+            {% endif %}
+
             <!-- Create Batch Form -->
-            <div class="mm-card" style="margin-bottom: 1.5rem;">
+            <div class="mm-card" style="margin-bottom: 1.5rem; {% if not profile or not profile.is_profile_complete %}opacity: 0.5; pointer-events: none;{% endif %}">
                 <div class="mm-card-header">
                     <h3><i class="bi bi-plus-circle"></i> Create New Batch</h3>
                 </div>
