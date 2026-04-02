@@ -60,7 +60,7 @@
         </p>
         <div class="mm-tutor-grid">
             {% for tutor in tutors %}
-            <div class="mm-tutor-card animate-in" style="animation-delay: {{ loop.index0 * 0.05 }}s; opacity: 0;">
+            <div class="mm-tutor-card animate-in" {{ 'style="animation-delay: ' ~ (loop.index0 * 0.05) ~ 's; opacity: 0;"' | safe }}>
                 <div class="mm-tutor-avatar">
                     {{ tutor.user.username[0]|upper }}
                 </div>
