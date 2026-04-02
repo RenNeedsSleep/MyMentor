@@ -4,7 +4,7 @@ Defines all database tables: User, TutorProfile, AvailabilitySlot, Booking, Reco
 """
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, ForeignKey, Text, DateTime
+    Column, Integer, String, Boolean, ForeignKey, Text, DateTime, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -29,6 +29,10 @@ class User(Base):
     bookings = relationship("Booking", back_populates="student")
     sent_messages = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender")
     received_messages = relationship("Message", foreign_keys="Message.receiver_id", back_populates="receiver")
+
+    # --- New relationships for Batch system (non-breaking additions) ---
+    owned_batches = relationship("Batch", back_populates="tutor")
+    batch_memberships = relationship("BatchMember", back_populates="student")
 
 
 class TutorProfile(Base):
@@ -122,3 +126,79 @@ class Message(Base):
 
     sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
     receiver = relationship("User", foreign_keys=[receiver_id], back_populates="received_messages")
+
+
+# =============================================================================
+# NEW MODELS — Batch System, Video Sessions, Study Materials
+# =============================================================================
+
+class Batch(Base):
+    """
+    Batch - a scheduled class group created by a tutor.
+    Students can browse and join batches.
+    """
+    __tablename__ = "batches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    scheduled_time = Column(String(100), nullable=False)
+    max_students = Column(Integer, nullable=False, default=30)
+    tutor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    tutor = relationship("User", back_populates="owned_batches")
+    members = relationship("BatchMember", back_populates="batch", cascade="all, delete-orphan")
+    video_sessions = relationship("VideoSession", back_populates="batch", cascade="all, delete-orphan")
+
+
+class BatchMember(Base):
+    """
+    BatchMember - tracks which students have joined which batches.
+    A student cannot join the same batch twice (unique constraint).
+    """
+    __tablename__ = "batch_members"
+    __table_args__ = (
+        UniqueConstraint("batch_id", "student_id", name="uq_batch_student"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(Integer, ForeignKey("batches.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    joined_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    batch = relationship("Batch", back_populates="members")
+    student = relationship("User", back_populates="batch_memberships")
+
+
+class VideoSession(Base):
+    """
+    VideoSession - a recorded/live session linked to a batch.
+    Replaces the concept of standalone recordings for batch-based content.
+    """
+    __tablename__ = "video_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(Integer, ForeignKey("batches.id"), nullable=False)
+    title = Column(String(300), nullable=False)
+    description = Column(Text, nullable=True)
+    video_url = Column(String(500), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    batch = relationship("Batch", back_populates="video_sessions")
+    materials = relationship("SessionMaterial", back_populates="session", cascade="all, delete-orphan")
+
+
+class SessionMaterial(Base):
+    """
+    SessionMaterial - study resources (PDFs, docs, etc.) attached to a video session.
+    """
+    __tablename__ = "session_materials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("video_sessions.id"), nullable=False)
+    file_url = Column(String(500), nullable=False)
+    file_type = Column(String(50), nullable=False, default="pdf")
+    uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    session = relationship("VideoSession", back_populates="materials")
