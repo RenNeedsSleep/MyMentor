@@ -18,8 +18,10 @@ from models import Batch, BatchMember, VideoSession, SessionMaterial  # new mode
 from auth import hash_password, verify_password, create_access_token, decode_access_token
 from services.messaging_access import check_batch_relationship
 from services.batch_service import get_member_count
+from services.tutor_service import check_profile_complete
 from routers.batch_router import batch_router
 from routers.session_router import session_router
+from routers.tutor_router import tutor_router
 
 
 
@@ -35,6 +37,7 @@ templates = Jinja2Templates(directory="templates")
 # --- Register new feature routers (non-breaking additions) ---
 app.include_router(batch_router)
 app.include_router(session_router)
+app.include_router(tutor_router)
 
 
 
@@ -75,6 +78,11 @@ async def register_user(
     email: str = Form(...),
     password: str = Form(...),
     role: str = Form(...),
+    full_name: str = Form(""),
+    bio: str = Form(""),
+    qualifications: str = Form(""),
+    subjects: str = Form(""),
+    experience_years: Optional[int] = Form(None),
     db: Session = Depends(get_db)
 ):
     existing = db.query(User).filter(
@@ -97,7 +105,15 @@ async def register_user(
     db.refresh(user)
 
     if role == "tutor":
-        profile = TutorProfile(user_id=user.id)
+        profile = TutorProfile(
+            user_id=user.id,
+            full_name=full_name if full_name else None,
+            bio=bio if bio else None,
+            qualifications=qualifications if qualifications else None,
+            subjects=subjects if subjects else None,
+            experience_years=experience_years,
+        )
+        profile.is_profile_complete = check_profile_complete(profile)
         db.add(profile)
         db.commit()
 
@@ -206,8 +222,12 @@ async def tutor_dashboard(request: Request, db: Session = Depends(get_db)):
 @app.post("/tutor/profile", response_class=HTMLResponse)
 async def update_tutor_profile(
     request: Request,
+    full_name: str = Form(""),
+    bio: str = Form(""),
     qualifications: str = Form(""),
     subjects: str = Form(""),
+    experience_years: Optional[int] = Form(None),
+    profile_image_url: str = Form(""),
     teaching_mode: str = Form("both"),
     location: str = Form(""),
     db: Session = Depends(get_db)
@@ -221,11 +241,16 @@ async def update_tutor_profile(
         profile = TutorProfile(user_id=user.id)
         db.add(profile)
 
+    profile.full_name = full_name if full_name else None
+    profile.bio = bio if bio else None
     profile.qualifications = qualifications
     profile.subjects = subjects
+    profile.experience_years = experience_years
+    profile.profile_image_url = profile_image_url if profile_image_url else None
     profile.teaching_mode = teaching_mode
     profile.location = location if location else None
     profile.subscription_active = teaching_mode in ("online", "both")
+    profile.is_profile_complete = check_profile_complete(profile)
     db.commit()
 
     return RedirectResponse(url="/tutor/dashboard", status_code=302)
@@ -408,6 +433,14 @@ async def create_batch_form(
     if not user or user.role != "tutor":
         return RedirectResponse(url="/login", status_code=302)
 
+    # --- Soft restriction: incomplete profiles cannot create batches ---
+    profile = db.query(TutorProfile).filter(TutorProfile.user_id == user.id).first()
+    if not profile or not profile.is_profile_complete:
+        raise HTTPException(
+            status_code=403,
+            detail="Please complete your profile (full name, qualifications, subjects) before creating batches."
+        )
+
     batch = Batch(
         name=name,
         description=description,
@@ -470,6 +503,14 @@ async def add_session_form(
     user = get_current_user(request, db)
     if not user or user.role != "tutor":
         return RedirectResponse(url="/login", status_code=302)
+
+    # --- Soft restriction: incomplete profiles cannot upload sessions ---
+    tutor_profile = db.query(TutorProfile).filter(TutorProfile.user_id == user.id).first()
+    if not tutor_profile or not tutor_profile.is_profile_complete:
+        raise HTTPException(
+            status_code=403,
+            detail="Please complete your profile before adding video sessions."
+        )
 
     batch = db.query(Batch).filter(Batch.id == batch_id, Batch.tutor_id == user.id).first()
     if not batch:

@@ -4,7 +4,7 @@ Defines all database tables: User, TutorProfile, AvailabilitySlot, Booking, Reco
 """
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, ForeignKey, Text, DateTime, UniqueConstraint
+    Column, Integer, String, Boolean, ForeignKey, Text, DateTime, UniqueConstraint, Float
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -49,6 +49,15 @@ class TutorProfile(Base):
     teaching_mode = Column(String(20), nullable=False, default="both")                               
     location = Column(String(255), nullable=True)                             
     subscription_active = Column(Boolean, default=False)                              
+
+    # --- New fields for tutor safety / quality (non-breaking additions) ---
+    full_name = Column(String(200), nullable=True)
+    bio = Column(Text, nullable=True)
+    experience_years = Column(Integer, nullable=True)
+    profile_image_url = Column(String(500), nullable=True)
+    is_profile_complete = Column(Boolean, default=False)
+    rating = Column(Float, default=0.0)
+    total_students = Column(Integer, default=0)
 
     
     user = relationship("User", back_populates="tutor_profile")
