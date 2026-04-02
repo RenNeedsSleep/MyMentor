@@ -55,6 +55,7 @@ class TutorProfile(Base):
     bio = Column(Text, nullable=True)
     experience_years = Column(Integer, nullable=True)
     profile_image_url = Column(String(500), nullable=True)
+    certificate_file_path = Column(String(500), nullable=True)
     is_profile_complete = Column(Boolean, default=False)
     rating = Column(Float, default=0.0)
     total_students = Column(Integer, default=0)

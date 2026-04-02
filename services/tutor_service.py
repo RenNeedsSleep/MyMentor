@@ -10,7 +10,7 @@ from models import TutorProfile, User
 def check_profile_complete(profile: TutorProfile) -> bool:
     """
     Determine if a tutor profile is complete.
-    A profile is complete if full_name, qualifications, and subjects are provided.
+    A profile is complete if full_name, qualifications, subjects, and a certificate are provided.
     """
     if not profile:
         return False
@@ -19,6 +19,8 @@ def check_profile_complete(profile: TutorProfile) -> bool:
     if not profile.qualifications or not profile.qualifications.strip():
         return False
     if not profile.subjects or not profile.subjects.strip():
+        return False
+    if not profile.certificate_file_path:
         return False
     return True
 

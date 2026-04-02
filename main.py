@@ -1,10 +1,11 @@
-
+import os
+import shutil
 from typing import Optional, List, Dict
 from datetime import datetime
 
 from fastapi import (
     FastAPI, Request, Depends, HTTPException, Form,
-    WebSocket, WebSocketDisconnect, Query
+    WebSocket, WebSocketDisconnect, Query, UploadFile, File
 )
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -230,6 +231,7 @@ async def update_tutor_profile(
     profile_image_url: str = Form(""),
     teaching_mode: str = Form("both"),
     location: str = Form(""),
+    certificate: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
     user = get_current_user(request, db)
@@ -250,6 +252,16 @@ async def update_tutor_profile(
     profile.teaching_mode = teaching_mode
     profile.location = location if location else None
     profile.subscription_active = teaching_mode in ("online", "both")
+    
+    if certificate and certificate.filename:
+        upload_dir = os.path.join("static", "uploads", "certificates")
+        os.makedirs(upload_dir, exist_ok=True)
+        file_name = f"tutor_{user.id}_{certificate.filename}"
+        file_path = os.path.join(upload_dir, file_name)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(certificate.file, buffer)
+        profile.certificate_file_path = f"/static/uploads/certificates/{file_name}"
+        
     profile.is_profile_complete = check_profile_complete(profile)
     db.commit()
 
