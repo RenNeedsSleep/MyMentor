@@ -21,6 +21,9 @@ from auth import hash_password, verify_password, create_access_token, decode_acc
 from services.messaging_access import check_batch_relationship
 from services.batch_service import get_member_count
 from services.tutor_service import check_profile_complete
+from services.enrollment_service import get_approved_enrollment_count, get_pending_enrollments_for_tutor
+from services.notification_service import get_user_notifications, get_unread_count
+from services.performance_service import get_student_analytics
 from routers.batch_router import batch_router
 from routers.session_router import session_router
 from routers.tutor_router import tutor_router
@@ -205,7 +208,7 @@ async def tutor_dashboard(request: Request, db: Session = Depends(get_db)):
 
     unread_count = db.query(func.count(Message.id)).filter(
         Message.receiver_id == user.id,
-        Message.is_read == False
+        Message.is_read.is_(False)
     ).scalar()
 
     # --- Fetch tutor's batches for the Batches tab ---
@@ -213,7 +216,6 @@ async def tutor_dashboard(request: Request, db: Session = Depends(get_db)):
     for b in tutor_batches:
         b.member_count = get_member_count(db, b.id)
         # Also count approved enrollments
-        from services.enrollment_service import get_approved_enrollment_count
         b.enrolled_count = get_approved_enrollment_count(db, b.id)
         b.sessions = db.query(VideoSession).filter(VideoSession.batch_id == b.id).order_by(VideoSession.created_at.desc()).all()
         for s in b.sessions:
@@ -225,14 +227,12 @@ async def tutor_dashboard(request: Request, db: Session = Depends(get_db)):
             e.computed_final_fee = e.fee_override if e.fee_override is not None else b.base_fee
 
     # --- Pending enrollment requests ---
-    from services.enrollment_service import get_pending_enrollments_for_tutor
     pending_enrollments = get_pending_enrollments_for_tutor(db, user.id)
     for e in pending_enrollments:
         e.student_user = db.query(User).filter(User.id == e.student_id).first()
         e.batch_obj = db.query(Batch).filter(Batch.id == e.batch_id).first()
 
     # --- Notifications ---
-    from services.notification_service import get_user_notifications, get_unread_count
     notif_list = get_user_notifications(db, user.id, limit=20)
     notif_unread = get_unread_count(db, user.id)
 
@@ -363,7 +363,7 @@ async def delete_slot(
     slot = db.query(AvailabilitySlot).filter(
         AvailabilitySlot.id == slot_id,
         AvailabilitySlot.tutor_id == profile.id,
-        AvailabilitySlot.is_booked == False
+        AvailabilitySlot.is_booked.is_(False)
     ).first()
 
     if slot:
@@ -448,11 +448,11 @@ async def student_dashboard(request: Request, db: Session = Depends(get_db)):
 
     unread_count = db.query(func.count(Message.id)).filter(
         Message.receiver_id == user.id,
-        Message.is_read == False
+        Message.is_read.is_(False)
     ).scalar()
 
     # --- Fetch batch data for the Batches tab ---
-    all_batches = db.query(Batch).filter(Batch.is_active == True).order_by(Batch.created_at.desc()).all()
+    all_batches = db.query(Batch).filter(Batch.is_active.is_(True)).order_by(Batch.created_at.desc()).all()
     joined_batch_ids = set()
     student_memberships = db.query(BatchMember).filter(BatchMember.student_id == user.id).all()
     for m in student_memberships:
@@ -469,7 +469,6 @@ async def student_dashboard(request: Request, db: Session = Depends(get_db)):
     # Enrich batches
     for b in all_batches:
         b.member_count = get_member_count(db, b.id)
-        from services.enrollment_service import get_approved_enrollment_count
         b.enrolled_count = get_approved_enrollment_count(db, b.id)
         b.tutor_user = db.query(User).filter(User.id == b.tutor_id).first()
         b.is_joined = b.id in joined_batch_ids
@@ -500,11 +499,9 @@ async def student_dashboard(request: Request, db: Session = Depends(get_db)):
         r.batch_obj = db.query(Batch).filter(Batch.id == r.batch_id).first()
 
     # --- Analytics data ---
-    from services.performance_service import get_student_analytics
     analytics = get_student_analytics(db, user.id)
 
     # --- Notifications ---
-    from services.notification_service import get_user_notifications, get_unread_count
     notif_list = get_user_notifications(db, user.id, limit=20)
     notif_unread = get_unread_count(db, user.id)
 
@@ -754,7 +751,7 @@ async def book_slot(
 
     slot = db.query(AvailabilitySlot).filter(
         AvailabilitySlot.id == slot_id,
-        AvailabilitySlot.is_booked == False
+        AvailabilitySlot.is_booked.is_(False)
     ).first()
 
     if not slot:
@@ -811,7 +808,7 @@ async def messages_page(request: Request, db: Session = Depends(get_db)):
         unread = db.query(func.count(Message.id)).filter(
             Message.sender_id == pid,
             Message.receiver_id == user.id,
-            Message.is_read == False
+            Message.is_read.is_(False)
         ).scalar()
         conversations.append({
             "partner": partner,
@@ -846,7 +843,7 @@ async def message_thread(partner_id: int, request: Request, db: Session = Depend
     db.query(Message).filter(
         Message.sender_id == partner_id,
         Message.receiver_id == user.id,
-        Message.is_read == False
+        Message.is_read.is_(False)
     ).update({"is_read": True})
     db.commit()
 
@@ -884,7 +881,7 @@ async def message_thread(partner_id: int, request: Request, db: Session = Depend
         unread = db.query(func.count(Message.id)).filter(
             Message.sender_id == pid,
             Message.receiver_id == user.id,
-            Message.is_read == False
+            Message.is_read.is_(False)
         ).scalar()
         conversations.append({
             "partner": p,
@@ -963,7 +960,7 @@ async def api_get_messages(partner_id: int, request: Request, after: str = Query
     db.query(Message).filter(
         Message.sender_id == partner_id,
         Message.receiver_id == user.id,
-        Message.is_read == False
+        Message.is_read.is_(False)
     ).update({"is_read": True})
     db.commit()
 
