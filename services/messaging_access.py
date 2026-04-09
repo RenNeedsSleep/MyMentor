@@ -1,26 +1,51 @@
 """
 messaging_access.py - Batch-based messaging permission check.
-A student can ONLY message a tutor if they share at least one batch.
-This is a reusable function that can be called from any route or dependency.
+Updated to support mode-based access control:
+- If batch.mode == "online": allow ONLY if enrollment.status == "approved"
+- If batch.mode == "offline" or "both": allow regardless of enrollment
+- Tutors can always reply to anyone who messages them
 """
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from models import Batch, BatchMember
+from models import Batch, Enrollment
 
 
 def check_batch_relationship(db: Session, student_id: int, tutor_id: int) -> bool:
     """
-    Check whether a student and a tutor share at least one batch.
+    Check whether a student can message a tutor based on batch enrollment rules.
 
-    A relationship exists if:
-    - The tutor owns a batch AND
-    - The student is a member of that same batch
-
-    Returns True if they share at least one batch, False otherwise.
+    Rules:
+    - If ANY shared batch has mode == "offline" or "both": messaging is allowed.
+    - If ALL shared batches have mode == "online": student must be "approved" in
+      at least one of them.
+    - If no shared batches at all: messaging is NOT allowed.
     """
-    shared = db.query(Batch).join(
+    # Get all batches owned by the tutor
+    tutor_batches = db.query(Batch).filter(Batch.tutor_id == tutor_id).all()
+    if not tutor_batches:
+        return False
+
+    for batch in tutor_batches:
+        # Check if student has any enrollment in this batch
+        enrollment = db.query(Enrollment).filter(
+            Enrollment.student_id == student_id,
+            Enrollment.batch_id == batch.id
+        ).first()
+
+        if batch.mode in ("offline", "both"):
+            # Messaging allowed regardless of enrollment status
+            if enrollment is not None:
+                return True
+        elif batch.mode == "online":
+            # Messaging allowed only if approved
+            if enrollment and enrollment.status == "approved":
+                return True
+
+    # Fallback: check legacy BatchMember table for backward compat
+    from models import BatchMember
+    legacy_shared = db.query(Batch).join(
         BatchMember, BatchMember.batch_id == Batch.id
     ).filter(
         and_(
@@ -29,4 +54,4 @@ def check_batch_relationship(db: Session, student_id: int, tutor_id: int) -> boo
         )
     ).first()
 
-    return shared is not None
+    return legacy_shared is not None
