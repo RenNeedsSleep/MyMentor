@@ -60,11 +60,12 @@
         </p>
         <div class="mm-tutor-grid">
             {% for tutor in tutors %}
-            <div class="mm-tutor-card animate-in" style="animation-delay: {{ loop.index0 * 0.05 }}s; opacity: 0;">
+            <div class="mm-tutor-card animate-in" {{ 'style="animation-delay: ' ~ (loop.index0 * 0.05) ~ 's; opacity: 0;"' | safe }}>
                 <div class="mm-tutor-avatar">
                     {{ tutor.user.username[0]|upper }}
                 </div>
-                <h4>{{ tutor.user.username }}</h4>
+                <h4>{{ tutor.user.username }}{% if tutor.full_name %}<span class="mm-profile-fullname">({{
+                        tutor.full_name }})</span>{% endif %}</h4>
                 <div class="mm-tutor-meta">
                     {% if tutor.subjects %}
                     {% for subj in tutor.subjects.split(',')[:3] %}
@@ -76,7 +77,26 @@
                     <span class="mm-badge mm-badge-warning">{{ tutor.location }}</span>
                     {% endif %}
                 </div>
-                <p class="qualifications">{{ tutor.qualifications or 'No qualifications listed' }}</p>
+                <!-- Trust Indicators -->
+                <div class="mm-trust-indicators">
+                    {% if tutor.rating and tutor.rating > 0 %}
+                    <span class="mm-trust-item rating"><i class="bi bi-star-fill"></i> {{ '%.1f'|format(tutor.rating)
+                        }}</span>
+                    {% endif %}
+                    {% if tutor.total_students and tutor.total_students > 0 %}
+                    <span class="mm-trust-item students"><i class="bi bi-people-fill"></i> {{ tutor.total_students
+                        }}</span>
+                    {% endif %}
+                    {% if tutor.experience_years %}
+                    <span class="mm-trust-item experience"><i class="bi bi-award-fill"></i> {{ tutor.experience_years
+                        }}yr</span>
+                    {% endif %}
+                    {% if tutor.is_profile_complete %}
+                    <span class="mm-profile-status mm-profile-status-complete"
+                        style="font-size: 0.7rem; padding: 3px 8px;">Verified</span>
+                    {% endif %}
+                </div>
+                <p class="qualifications">{{ tutor.bio or tutor.qualifications or 'No qualifications listed' }}</p>
                 <div class="actions">
                     {% set available_count = tutor.availability_slots|selectattr('is_booked', 'equalto',
                     false)|list|length %}

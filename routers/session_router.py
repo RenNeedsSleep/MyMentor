@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Batch, BatchMember, VideoSession
+from models import User, Batch, BatchMember, VideoSession, TutorProfile
 from batch_schemas import VideoSessionCreate, SessionMaterialCreate
 from auth import decode_access_token
 from services.session_service import (
@@ -71,6 +71,14 @@ async def add_session_endpoint(
     if batch.tutor_id != user.id:
         raise HTTPException(status_code=403, detail="You do not own this batch.")
 
+    # --- Soft restriction: incomplete profiles cannot upload video sessions ---
+    profile = db.query(TutorProfile).filter(TutorProfile.user_id == user.id).first()
+    if not profile or not profile.is_profile_complete:
+        raise HTTPException(
+            status_code=403,
+            detail="Please complete your profile before adding video sessions."
+        )
+
     session = create_video_session(
         db=db,
         batch_id=batch_id,
@@ -109,6 +117,14 @@ async def upload_material_endpoint(
     batch = db.query(Batch).filter(Batch.id == session_obj.batch_id).first()
     if not batch or batch.tutor_id != user.id:
         raise HTTPException(status_code=403, detail="You do not own this session's batch.")
+
+    # --- Soft restriction: incomplete profiles cannot upload materials ---
+    profile = db.query(TutorProfile).filter(TutorProfile.user_id == user.id).first()
+    if not profile or not profile.is_profile_complete:
+        raise HTTPException(
+            status_code=403,
+            detail="Please complete your profile before uploading materials."
+        )
 
     material = add_session_material(
         db=db,

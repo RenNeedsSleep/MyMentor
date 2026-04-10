@@ -8,13 +8,14 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Batch, BatchMember
+from models import User, Batch, BatchMember, TutorProfile
 from batch_schemas import BatchCreate, BatchResponse, BatchMemberResponse
 from auth import decode_access_token
 from services.batch_service import (
     create_batch, get_tutor_batches, get_all_batches,
     join_batch, get_batch_members, get_member_count
 )
+from services.tutor_service import check_profile_complete
 
 batch_router = APIRouter(tags=["Batches"])
 
@@ -57,6 +58,14 @@ async def create_batch_endpoint(
     user = _require_user(request, db)
     if user.role != "tutor":
         raise HTTPException(status_code=403, detail="Only tutors can create batches.")
+
+    # --- Soft restriction: incomplete profiles cannot create batches ---
+    profile = db.query(TutorProfile).filter(TutorProfile.user_id == user.id).first()
+    if not profile or not profile.is_profile_complete:
+        raise HTTPException(
+            status_code=403,
+            detail="Please complete your profile (full name, qualifications, subjects) before creating batches."
+        )
 
     batch = create_batch(
         db=db,

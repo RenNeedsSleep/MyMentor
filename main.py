@@ -1,10 +1,11 @@
-
+import os
+import shutil
 from typing import Optional, List, Dict
 from datetime import datetime
 
 from fastapi import (
     FastAPI, Request, Depends, HTTPException, Form,
-    WebSocket, WebSocketDisconnect, Query
+    WebSocket, WebSocketDisconnect, Query, UploadFile, File
 )
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,11 +15,22 @@ from sqlalchemy import or_, and_, func
 
 from database import engine, get_db, Base
 from models import User, TutorProfile, AvailabilitySlot, Booking, Recording, Message
-from models import Batch, BatchMember, VideoSession, SessionMaterial  # new models for table creation
+from models import Batch, BatchMember, VideoSession, SessionMaterial  # existing models
+from models import Enrollment, PerformanceRecord, Notification  # new models for table creation
 from auth import hash_password, verify_password, create_access_token, decode_access_token
 from services.messaging_access import check_batch_relationship
+from services.batch_service import get_member_count
+from services.tutor_service import check_profile_complete
+from services.enrollment_service import get_approved_enrollment_count, get_pending_enrollments_for_tutor
+from services.notification_service import get_user_notifications, get_unread_count
+from services.performance_service import get_student_analytics
 from routers.batch_router import batch_router
 from routers.session_router import session_router
+from routers.tutor_router import tutor_router
+from routers.enrollment_router import enrollment_router
+from routers.performance_router import performance_router
+from routers.notification_router import notification_router
+from routers.user_router import user_router
 
 
 
@@ -31,9 +43,14 @@ Base.metadata.create_all(bind=engine)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# --- Register new feature routers (non-breaking additions) ---
+# --- Register feature routers ---
 app.include_router(batch_router)
 app.include_router(session_router)
+app.include_router(tutor_router)
+app.include_router(enrollment_router)
+app.include_router(performance_router)
+app.include_router(notification_router)
+app.include_router(user_router)
 
 
 
@@ -74,6 +91,11 @@ async def register_user(
     email: str = Form(...),
     password: str = Form(...),
     role: str = Form(...),
+    full_name: str = Form(""),
+    bio: str = Form(""),
+    qualifications: str = Form(""),
+    subjects: str = Form(""),
+    experience_years: Optional[int] = Form(None),
     db: Session = Depends(get_db)
 ):
     existing = db.query(User).filter(
@@ -96,7 +118,15 @@ async def register_user(
     db.refresh(user)
 
     if role == "tutor":
-        profile = TutorProfile(user_id=user.id)
+        profile = TutorProfile(
+            user_id=user.id,
+            full_name=full_name if full_name else None,
+            bio=bio if bio else None,
+            qualifications=qualifications if qualifications else None,
+            subjects=subjects if subjects else None,
+            experience_years=experience_years,
+        )
+        profile.is_profile_complete = check_profile_complete(profile)
         db.add(profile)
         db.commit()
 
@@ -176,11 +206,55 @@ async def tutor_dashboard(request: Request, db: Session = Depends(get_db)):
             joinedload(Booking.recording)
         ).order_by(Booking.id.desc()).all()
 
-                           
     unread_count = db.query(func.count(Message.id)).filter(
         Message.receiver_id == user.id,
-        Message.is_read == False
+        Message.is_read.is_(False)
     ).scalar()
+
+    # --- Fetch tutor's batches for the Batches tab ---
+    tutor_batches = db.query(Batch).filter(Batch.tutor_id == user.id).order_by(Batch.created_at.desc()).all()
+    for b in tutor_batches:
+        b.member_count = get_member_count(db, b.id)
+        # Also count approved enrollments
+        b.enrolled_count = get_approved_enrollment_count(db, b.id)
+        b.sessions = db.query(VideoSession).filter(VideoSession.batch_id == b.id).order_by(VideoSession.created_at.desc()).all()
+        for s in b.sessions:
+            s.material_list = db.query(SessionMaterial).filter(SessionMaterial.session_id == s.id).all()
+        # Fetch enrollments for this batch
+        b.enrollment_list = db.query(Enrollment).filter(Enrollment.batch_id == b.id).order_by(Enrollment.joined_at.desc()).all()
+        for e in b.enrollment_list:
+            e.student_user = db.query(User).filter(User.id == e.student_id).first()
+            e.computed_final_fee = e.fee_override if e.fee_override is not None else b.base_fee
+
+    # --- Pending enrollment requests ---
+    pending_enrollments = get_pending_enrollments_for_tutor(db, user.id)
+    for e in pending_enrollments:
+        e.student_user = db.query(User).filter(User.id == e.student_id).first()
+        e.batch_obj = db.query(Batch).filter(Batch.id == e.batch_id).first()
+
+    # --- Notifications ---
+    notif_list = get_user_notifications(db, user.id, limit=20)
+    notif_unread = get_unread_count(db, user.id)
+
+    # --- Approved students (for performance tracking) ---
+    approved_students = []
+    for b in tutor_batches:
+        for e in b.enrollment_list:
+            if e.status == "approved" and e.student_user:
+                approved_students.append({
+                    "student_id": e.student_id,
+                    "student_username": e.student_user.username,
+                    "batch_id": b.id,
+                    "batch_name": b.name
+                })
+
+    # --- Performance records created by this tutor ---
+    tutor_perf_records = db.query(PerformanceRecord).filter(
+        PerformanceRecord.tutor_id == user.id
+    ).order_by(PerformanceRecord.created_at.desc()).limit(50).all()
+    for r in tutor_perf_records:
+        r.student_user = db.query(User).filter(User.id == r.student_id).first()
+        r.batch_obj = db.query(Batch).filter(Batch.id == r.batch_id).first()
 
     return templates.TemplateResponse("tutor_dashboard.html", {
         "request": request,
@@ -188,17 +262,28 @@ async def tutor_dashboard(request: Request, db: Session = Depends(get_db)):
         "profile": profile,
         "slots": slots,
         "bookings": bookings,
-        "unread_count": unread_count
+        "unread_count": unread_count,
+        "tutor_batches": tutor_batches,
+        "pending_enrollments": pending_enrollments,
+        "notif_list": notif_list,
+        "notif_unread": notif_unread,
+        "approved_students": approved_students,
+        "tutor_perf_records": tutor_perf_records
     })
 
 
 @app.post("/tutor/profile", response_class=HTMLResponse)
 async def update_tutor_profile(
     request: Request,
+    full_name: str = Form(""),
+    bio: str = Form(""),
     qualifications: str = Form(""),
     subjects: str = Form(""),
+    experience_years: Optional[int] = Form(None),
+    profile_image_url: str = Form(""),
     teaching_mode: str = Form("both"),
     location: str = Form(""),
+    certificate: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
     user = get_current_user(request, db)
@@ -210,11 +295,26 @@ async def update_tutor_profile(
         profile = TutorProfile(user_id=user.id)
         db.add(profile)
 
+    profile.full_name = full_name if full_name else None
+    profile.bio = bio if bio else None
     profile.qualifications = qualifications
     profile.subjects = subjects
+    profile.experience_years = experience_years
+    profile.profile_image_url = profile_image_url if profile_image_url else None
     profile.teaching_mode = teaching_mode
     profile.location = location if location else None
     profile.subscription_active = teaching_mode in ("online", "both")
+    
+    if certificate and certificate.filename:
+        upload_dir = os.path.join("static", "uploads", "certificates")
+        os.makedirs(upload_dir, exist_ok=True)
+        file_name = f"tutor_{user.id}_{certificate.filename}"
+        file_path = os.path.join(upload_dir, file_name)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(certificate.file, buffer)
+        profile.certificate_file_path = f"/static/uploads/certificates/{file_name}"
+        
+    profile.is_profile_complete = check_profile_complete(profile)
     db.commit()
 
     return RedirectResponse(url="/tutor/dashboard", status_code=302)
@@ -263,7 +363,7 @@ async def delete_slot(
     slot = db.query(AvailabilitySlot).filter(
         AvailabilitySlot.id == slot_id,
         AvailabilitySlot.tutor_id == profile.id,
-        AvailabilitySlot.is_booked == False
+        AvailabilitySlot.is_booked.is_(False)
     ).first()
 
     if slot:
@@ -348,15 +448,227 @@ async def student_dashboard(request: Request, db: Session = Depends(get_db)):
 
     unread_count = db.query(func.count(Message.id)).filter(
         Message.receiver_id == user.id,
-        Message.is_read == False
+        Message.is_read.is_(False)
     ).scalar()
+
+    # --- Fetch batch data for the Batches tab ---
+    all_batches = db.query(Batch).filter(Batch.is_active.is_(True)).order_by(Batch.created_at.desc()).all()
+    joined_batch_ids = set()
+    student_memberships = db.query(BatchMember).filter(BatchMember.student_id == user.id).all()
+    for m in student_memberships:
+        joined_batch_ids.add(m.batch_id)
+
+    # Also check enrollment-based joins
+    student_enrollments = db.query(Enrollment).filter(Enrollment.student_id == user.id).all()
+    enrollment_map = {}  # batch_id -> enrollment
+    for e in student_enrollments:
+        enrollment_map[e.batch_id] = e
+        if e.status == "approved":
+            joined_batch_ids.add(e.batch_id)
+
+    # Enrich batches
+    for b in all_batches:
+        b.member_count = get_member_count(db, b.id)
+        b.enrolled_count = get_approved_enrollment_count(db, b.id)
+        b.tutor_user = db.query(User).filter(User.id == b.tutor_id).first()
+        b.is_joined = b.id in joined_batch_ids
+        b.enrollment = enrollment_map.get(b.id, None)
+        if b.is_joined:
+            b.sessions = db.query(VideoSession).filter(VideoSession.batch_id == b.id).order_by(VideoSession.created_at.desc()).all()
+            for s in b.sessions:
+                s.material_list = db.query(SessionMaterial).filter(SessionMaterial.session_id == s.id).all()
+        else:
+            b.sessions = []
+
+    # --- Student enrollments list ---
+    my_enrollments = db.query(Enrollment).filter(Enrollment.student_id == user.id).order_by(Enrollment.joined_at.desc()).all()
+    for e in my_enrollments:
+        e.batch_obj = db.query(Batch).filter(Batch.id == e.batch_id).first()
+        if e.batch_obj:
+            e.tutor_user = db.query(User).filter(User.id == e.batch_obj.tutor_id).first()
+            e.computed_final_fee = e.fee_override if e.fee_override is not None else e.batch_obj.base_fee
+        else:
+            e.tutor_user = None
+            e.computed_final_fee = 0.0
+
+    # --- Performance records ---
+    my_performance = db.query(PerformanceRecord).filter(
+        PerformanceRecord.student_id == user.id
+    ).order_by(PerformanceRecord.session_date.desc()).all()
+    for r in my_performance:
+        r.batch_obj = db.query(Batch).filter(Batch.id == r.batch_id).first()
+
+    # --- Analytics data ---
+    analytics = get_student_analytics(db, user.id)
+
+    # --- Notifications ---
+    notif_list = get_user_notifications(db, user.id, limit=20)
+    notif_unread = get_unread_count(db, user.id)
 
     return templates.TemplateResponse("student_dashboard.html", {
         "request": request,
         "user": user,
         "bookings": bookings,
-        "unread_count": unread_count
+        "unread_count": unread_count,
+        "all_batches": all_batches,
+        "joined_batch_ids": joined_batch_ids,
+        "my_enrollments": my_enrollments,
+        "my_performance": my_performance,
+        "analytics": analytics,
+        "notif_list": notif_list,
+        "notif_unread": notif_unread
     })
+
+
+# =============================================================================
+# BATCH HTML FORM ROUTES (server-side rendering, same pattern as existing)
+# =============================================================================
+
+@app.post("/tutor/batch/create")
+async def create_batch_form(
+    request: Request,
+    name: str = Form(...),
+    description: str = Form(""),
+    scheduled_time: str = Form(""),
+    subject: str = Form(""),
+    base_fee: float = Form(0.0),
+    mode: str = Form("both"),
+    schedule: str = Form(""),
+    max_students: int = Form(30),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or user.role != "tutor":
+        return RedirectResponse(url="/login", status_code=302)
+
+    profile = db.query(TutorProfile).filter(TutorProfile.user_id == user.id).first()
+    if not profile or not profile.is_profile_complete:
+        raise HTTPException(
+            status_code=403,
+            detail="Please complete your profile (full name, qualifications, subjects) before creating batches."
+        )
+
+    batch = Batch(
+        name=name,
+        description=description,
+        scheduled_time=scheduled_time if scheduled_time else None,
+        subject=subject if subject else None,
+        base_fee=base_fee,
+        mode=mode,
+        schedule=schedule if schedule else None,
+        max_students=max_students,
+        tutor_id=user.id,
+        is_active=True,
+        created_at=datetime.utcnow()
+    )
+    db.add(batch)
+    db.commit()
+    return RedirectResponse(url="/tutor/dashboard#section-batches", status_code=302)
+
+
+@app.post("/student/batch/{batch_id}/join")
+async def join_batch_form(
+    batch_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or user.role != "student":
+        return RedirectResponse(url="/login", status_code=302)
+
+    batch = db.query(Batch).filter(Batch.id == batch_id).first()
+    if not batch:
+        return RedirectResponse(url="/student/dashboard", status_code=302)
+
+    # Check duplicate
+    existing = db.query(BatchMember).filter(
+        BatchMember.batch_id == batch_id,
+        BatchMember.student_id == user.id
+    ).first()
+    if existing:
+        return RedirectResponse(url="/student/dashboard#section-batches", status_code=302)
+
+    # Check capacity
+    current_count = get_member_count(db, batch_id)
+    if current_count >= batch.max_students:
+        return RedirectResponse(url="/student/dashboard#section-batches", status_code=302)
+
+    member = BatchMember(
+        batch_id=batch_id,
+        student_id=user.id,
+        joined_at=datetime.utcnow()
+    )
+    db.add(member)
+    db.commit()
+    return RedirectResponse(url="/student/dashboard#section-batches", status_code=302)
+
+
+@app.post("/tutor/batch/{batch_id}/add-session")
+async def add_session_form(
+    batch_id: int,
+    request: Request,
+    title: str = Form(...),
+    description: str = Form(""),
+    video_url: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or user.role != "tutor":
+        return RedirectResponse(url="/login", status_code=302)
+
+    # --- Soft restriction: incomplete profiles cannot upload sessions ---
+    tutor_profile = db.query(TutorProfile).filter(TutorProfile.user_id == user.id).first()
+    if not tutor_profile or not tutor_profile.is_profile_complete:
+        raise HTTPException(
+            status_code=403,
+            detail="Please complete your profile before adding video sessions."
+        )
+
+    batch = db.query(Batch).filter(Batch.id == batch_id, Batch.tutor_id == user.id).first()
+    if not batch:
+        return RedirectResponse(url="/tutor/dashboard", status_code=302)
+
+    session = VideoSession(
+        batch_id=batch_id,
+        title=title,
+        description=description,
+        video_url=video_url,
+        created_at=datetime.utcnow()
+    )
+    db.add(session)
+    db.commit()
+    return RedirectResponse(url="/tutor/dashboard#section-batches", status_code=302)
+
+
+@app.post("/tutor/session/{session_id}/upload-material")
+async def upload_material_form(
+    session_id: int,
+    request: Request,
+    file_url: str = Form(...),
+    file_type: str = Form("pdf"),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or user.role != "tutor":
+        return RedirectResponse(url="/login", status_code=302)
+
+    session_obj = db.query(VideoSession).filter(VideoSession.id == session_id).first()
+    if not session_obj:
+        return RedirectResponse(url="/tutor/dashboard", status_code=302)
+
+    batch = db.query(Batch).filter(Batch.id == session_obj.batch_id, Batch.tutor_id == user.id).first()
+    if not batch:
+        return RedirectResponse(url="/tutor/dashboard", status_code=302)
+
+    material = SessionMaterial(
+        session_id=session_id,
+        file_url=file_url,
+        file_type=file_type,
+        uploaded_at=datetime.utcnow()
+    )
+    db.add(material)
+    db.commit()
+    return RedirectResponse(url="/tutor/dashboard#section-batches", status_code=302)
 
 
 @app.get("/student/search", response_class=HTMLResponse)
@@ -439,7 +751,7 @@ async def book_slot(
 
     slot = db.query(AvailabilitySlot).filter(
         AvailabilitySlot.id == slot_id,
-        AvailabilitySlot.is_booked == False
+        AvailabilitySlot.is_booked.is_(False)
     ).first()
 
     if not slot:
@@ -496,7 +808,7 @@ async def messages_page(request: Request, db: Session = Depends(get_db)):
         unread = db.query(func.count(Message.id)).filter(
             Message.sender_id == pid,
             Message.receiver_id == user.id,
-            Message.is_read == False
+            Message.is_read.is_(False)
         ).scalar()
         conversations.append({
             "partner": partner,
@@ -531,7 +843,7 @@ async def message_thread(partner_id: int, request: Request, db: Session = Depend
     db.query(Message).filter(
         Message.sender_id == partner_id,
         Message.receiver_id == user.id,
-        Message.is_read == False
+        Message.is_read.is_(False)
     ).update({"is_read": True})
     db.commit()
 
@@ -569,7 +881,7 @@ async def message_thread(partner_id: int, request: Request, db: Session = Depend
         unread = db.query(func.count(Message.id)).filter(
             Message.sender_id == pid,
             Message.receiver_id == user.id,
-            Message.is_read == False
+            Message.is_read.is_(False)
         ).scalar()
         conversations.append({
             "partner": p,
@@ -648,7 +960,7 @@ async def api_get_messages(partner_id: int, request: Request, after: str = Query
     db.query(Message).filter(
         Message.sender_id == partner_id,
         Message.receiver_id == user.id,
-        Message.is_read == False
+        Message.is_read.is_(False)
     ).update({"is_read": True})
     db.commit()
 

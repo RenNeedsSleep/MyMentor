@@ -23,6 +23,19 @@
             <a href="/student/search" class="mm-sidebar-link">
                 <span class="icon"><i class="bi bi-search"></i></span> Find a Tutor
             </a>
+            <a href="#" class="mm-sidebar-link" onclick="showTab('batches')">
+                <span class="icon"><i class="bi bi-collection"></i></span> Batches
+            </a>
+            <a href="#" class="mm-sidebar-link" onclick="showTab('enrollments')">
+                <span class="icon"><i class="bi bi-person-check"></i></span> My Enrollments
+            </a>
+            <a href="#" class="mm-sidebar-link" onclick="showTab('performance')">
+                <span class="icon"><i class="bi bi-graph-up"></i></span> Performance
+            </a>
+            <a href="#" class="mm-sidebar-link" onclick="showTab('notifications')">
+                <span class="icon"><i class="bi bi-bell"></i></span> Notifications
+                {% if notif_unread %}<span class="mm-notif-dot">{{ notif_unread }}</span>{% endif %}
+            </a>
             <a href="/messages" class="mm-sidebar-link">
                 <span class="icon"><i class="bi bi-chat-dots"></i></span> Messages
                 {% if unread_count %}<span class="mm-notif-dot">{{ unread_count }}</span>{% endif %}
@@ -200,6 +213,362 @@
                 {% endif %}
             </div>
         </div>
+
+        <!-- BATCHES TAB -->
+        <div id="tab-batches" class="mm-tab-content">
+            <div class="mm-page-header">
+                <h1>Batches</h1>
+                <p>Browse and request enrollment in class batches created by tutors</p>
+            </div>
+
+            {% if all_batches %}
+            {% for batch in all_batches %}
+            <div class="mm-card" style="margin-bottom: 1.5rem;">
+                <div class="mm-card-header">
+                    <h3>{{ batch.name }}</h3>
+                    <div>
+                        {% if batch.is_joined %}
+                        <span class="mm-badge mm-badge-accent">Enrolled</span>
+                        {% elif batch.enrollment and batch.enrollment.status == 'pending' %}
+                        <span class="mm-badge mm-badge-warning">Request Pending</span>
+                        {% elif batch.enrollment and batch.enrollment.status == 'rejected' %}
+                        <span class="mm-badge mm-badge-danger">Rejected</span>
+                        {% else %}
+                        <span class="mm-badge mm-badge-primary">{{ batch.enrolled_count or batch.member_count }}/{{ batch.max_students }} students</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div>
+                        {% if batch.description %}
+                        <p style="color: var(--text-muted); margin: 0; font-size: 0.9rem;">{{ batch.description }}</p>
+                        {% endif %}
+                        <div style="margin-top: 0.5rem; font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 1rem;">
+                            <span style="color: var(--text-muted);"><i class="bi bi-person"></i> Tutor: <strong>{{ batch.tutor_user.username if batch.tutor_user else 'Unknown' }}</strong></span>
+                            {% if batch.subject %}
+                            <span style="color: var(--text-muted);"><i class="bi bi-book"></i> {{ batch.subject }}</span>
+                            {% endif %}
+                            {% if batch.scheduled_time %}
+                            <span style="color: var(--text-muted);"><i class="bi bi-clock"></i> {{ batch.scheduled_time }}</span>
+                            {% endif %}
+                            {% if batch.base_fee %}
+                            <span style="color: var(--blue); font-weight: 600;"><i class="bi bi-currency-rupee"></i> ₹{{ '%.0f'|format(batch.base_fee) }}</span>
+                            {% endif %}
+                            {% if batch.mode and batch.mode != 'both' %}
+                            <span class="mm-badge mm-badge-primary" style="font-size: 0.75rem;">{{ batch.mode }}</span>
+                            {% endif %}
+                        </div>
+                        {% if batch.schedule %}
+                        <div style="margin-top: 0.25rem; font-size: 0.82rem; color: var(--text-secondary);"><i class="bi bi-calendar2-week"></i> {{ batch.schedule }}</div>
+                        {% endif %}
+                    </div>
+
+                    {% if not batch.is_joined %}
+                        {% if batch.enrollment and batch.enrollment.status == 'pending' %}
+                        <span class="mm-badge mm-badge-warning" style="white-space: nowrap;"><i class="bi bi-hourglass-split"></i> Awaiting Approval</span>
+                        {% elif batch.enrollment and batch.enrollment.status == 'rejected' %}
+                        <span class="mm-badge mm-badge-danger" style="white-space: nowrap;"><i class="bi bi-x-circle"></i> Enrollment Rejected</span>
+                        {% elif (batch.enrolled_count or batch.member_count) < batch.max_students %}
+                        <button class="btn-mm btn-mm-primary btn-mm-sm" data-batch-id="{{ batch.id }}" onclick="requestEnrollment(this.dataset.batchId, this)" style="white-space: nowrap;">
+                            <i class="bi bi-person-plus"></i> Request Enrollment
+                        </button>
+                        {% else %}
+                        <span class="mm-badge mm-badge-warning">Full</span>
+                        {% endif %}
+                    {% endif %}
+                </div>
+
+                <!-- Fee info for enrolled student -->
+                {% if batch.is_joined and batch.enrollment %}
+                <div style="padding: 8px 14px; background: var(--blue-pale); border-radius: var(--radius-sm); margin-bottom: 1rem; font-size: 0.88rem; display: flex; align-items: center; gap: 1rem;">
+                    <span><i class="bi bi-receipt"></i> Your fee: <strong>₹{{ '%.0f'|format(batch.enrollment.fee_override if batch.enrollment.fee_override is not none else batch.base_fee) }}</strong></span>
+                    {% if batch.enrollment.fee_locked %}
+                    <span class="mm-badge mm-badge-primary" style="font-size: 0.75rem;"><i class="bi bi-lock-fill"></i> Locked</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- Show sessions only for joined batches -->
+                {% if batch.is_joined and batch.sessions %}
+                <div class="mm-table-wrapper">
+                    <table class="mm-table">
+                        <thead>
+                            <tr>
+                                <th>Session</th>
+                                <th>Video</th>
+                                <th>Materials</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for session in batch.sessions %}
+                            <tr>
+                                <td>
+                                    <strong>{{ session.title }}</strong>
+                                    {% if session.description %}<br><small style="color: var(--text-muted);">{{ session.description }}</small>{% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ session.video_url }}" target="_blank" class="mm-recording-link">
+                                        <i class="bi bi-play-circle"></i> Watch
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if session.material_list %}
+                                    {% for mat in session.material_list %}
+                                    <a href="{{ mat.file_url }}" target="_blank" style="display:inline-block; margin: 2px;">
+                                        <span class="mm-badge mm-badge-accent">{{ mat.file_type }}</span>
+                                    </a>
+                                    {% endfor %}
+                                    {% else %}
+                                    <small style="color: var(--text-muted);">None</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% elif batch.is_joined %}
+                <div style="text-align: center; padding: 1rem; color: var(--text-muted); font-size: 0.9rem;">
+                    <i class="bi bi-camera-video"></i> No sessions posted yet — check back later.
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="mm-card">
+                <div class="mm-empty-state">
+                    <div class="icon"><i class="bi bi-collection"></i></div>
+                    <h4>No batches available</h4>
+                    <p>No tutors have created batches yet. Check back later!</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- ENROLLMENTS TAB -->
+        <!-- ============================================================= -->
+        <div id="tab-enrollments" class="mm-tab-content">
+            <div class="mm-page-header">
+                <h1>My Enrollments</h1>
+                <p>Track status of your batch enrollment requests</p>
+            </div>
+
+            <div class="mm-card">
+                {% if my_enrollments %}
+                <div class="mm-table-wrapper">
+                    <table class="mm-table">
+                        <thead>
+                            <tr>
+                                <th>Batch</th>
+                                <th>Tutor</th>
+                                <th>Status</th>
+                                <th>Fee</th>
+                                <th>Requested</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for e in my_enrollments %}
+                            <tr>
+                                <td><strong>{{ e.batch_obj.name if e.batch_obj else '—' }}</strong></td>
+                                <td>{{ e.tutor_user.username if e.tutor_user else '—' }}</td>
+                                <td>
+                                    <span class="mm-badge {% if e.status == 'approved' %}mm-badge-accent{% elif e.status == 'pending' %}mm-badge-warning{% else %}mm-badge-danger{% endif %}">
+                                        {% if e.status == 'approved' %}<i class="bi bi-check-circle"></i>{% elif e.status == 'pending' %}<i class="bi bi-hourglass-split"></i>{% else %}<i class="bi bi-x-circle"></i>{% endif %}
+                                        {{ e.status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if e.status == 'approved' %}
+                                    <span style="font-weight: 600;">₹{{ '%.0f'|format(e.computed_final_fee or 0) }}</span>
+                                    {% if e.fee_locked %}<i class="bi bi-lock-fill" style="color: var(--blue); margin-left: 4px;" title="Fee locked"></i>{% endif %}
+                                    {% else %}
+                                    <span style="color: var(--text-muted);">₹{{ '%.0f'|format(e.computed_final_fee or 0) }}</span>
+                                    {% endif %}
+                                </td>
+                                <td style="font-size: 0.85rem; color: var(--text-muted);">{{ e.joined_at.strftime('%b %d, %Y') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="mm-empty-state">
+                    <div class="icon"><i class="bi bi-inbox"></i></div>
+                    <h4>No enrollments yet</h4>
+                    <p>Browse batches and request enrollment to get started!</p>
+                    <button class="btn-mm btn-mm-primary" style="margin-top: 1rem;" onclick="showTab('batches')">Browse Batches</button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- PERFORMANCE TAB -->
+        <!-- ============================================================= -->
+        <div id="tab-performance" class="mm-tab-content">
+            <div class="mm-page-header">
+                <h1>My Performance</h1>
+                <p>Track your academic progress and ratings from tutors</p>
+            </div>
+
+            <!-- Analytics Summary -->
+            {% if analytics %}
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                <!-- Average Score -->
+                <div class="mm-card" style="text-align: center;">
+                    <div style="font-size: 2.5rem; font-weight: 800; color: var(--blue); line-height: 1;">
+                        {{ '%.1f'|format(analytics.average_score.average_score) if analytics.average_score.average_score else '—' }}
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">Average Score (out of 4)</div>
+                </div>
+
+                <!-- Rating Distribution -->
+                <div class="mm-card">
+                    <h4 style="font-size: 0.85rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text);">Rating Distribution</h4>
+                    {% for rating_name in ['excellent', 'great', 'good', 'satisfactory'] %}
+                    {% set count = analytics.rating_distribution.get(rating_name, 0) %}
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                        <span style="font-size: 0.78rem; min-width: 80px; color: var(--text-secondary);">
+                            {% if rating_name == 'excellent' %}⭐ Excellent{% elif rating_name == 'great' %}🌟 Great{% elif rating_name == 'good' %}👍 Good{% else %}📝 Satisfactory{% endif %}
+                        </span>
+                        <div style="flex: 1; height: 8px; background: var(--bg-gray); border-radius: 4px; overflow: hidden;">
+                            {% set total = analytics.rating_distribution.values()|sum %}
+                            <div style="height: 100%; width: {{ (count / total * 100) if total > 0 else 0 }}%; background: var(--blue); border-radius: 4px; transition: width 0.5s ease;"></div>
+                        </div>
+                        <span style="font-size: 0.78rem; font-weight: 600; min-width: 20px; text-align: right;">{{ count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Performance Trend -->
+                <div class="mm-card">
+                    <h4 style="font-size: 0.85rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text);">Recent Trend</h4>
+                    {% if analytics.performance_trend %}
+                    <div style="display: flex; align-items: flex-end; gap: 4px; height: 80px;">
+                        {% for point in analytics.performance_trend[-10:] %}
+                        <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                            <div style="width: 100%; background: var(--blue); border-radius: 3px 3px 0 0; height: {{ (point.score / 4 * 60)|int }}px; min-height: 4px; transition: height 0.3s ease;" title="{{ point.date }}: {{ point.score }}/4"></div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div style="display: flex; gap: 4px; margin-top: 4px;">
+                        {% for point in analytics.performance_trend[-10:] %}
+                        <div style="flex: 1; text-align: center; font-size: 0.6rem; color: var(--text-muted);">{{ point.date[-5:] }}</div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p style="color: var(--text-muted); font-size: 0.85rem;">No trend data yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Performance Records Table -->
+            <div class="mm-card">
+                <div class="mm-card-header">
+                    <h3><i class="bi bi-table"></i> Performance Records</h3>
+                    <span class="mm-badge mm-badge-primary">{{ my_performance|length }} records</span>
+                </div>
+
+                {% if my_performance %}
+                <div class="mm-table-wrapper">
+                    <table class="mm-table">
+                        <thead>
+                            <tr>
+                                <th>Batch</th>
+                                <th>Rating</th>
+                                <th>Score</th>
+                                <th>Tutor's Note</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in my_performance %}
+                            <tr>
+                                <td><strong>{{ r.batch_obj.name if r.batch_obj else '—' }}</strong></td>
+                                <td>
+                                    <span class="mm-rating-badge mm-rating-{{ r.rating }}">
+                                        {% if r.rating == 'excellent' %}⭐ Excellent
+                                        {% elif r.rating == 'great' %}🌟 Great
+                                        {% elif r.rating == 'good' %}👍 Good
+                                        {% else %}📝 Satisfactory{% endif %}
+                                    </span>
+                                </td>
+                                <td><strong>{{ r.score }}</strong>/4</td>
+                                <td style="color: var(--text-secondary); font-size: 0.88rem; max-width: 250px;">{{ r.tutor_note or '—' }}</td>
+                                <td style="font-size: 0.85rem; color: var(--text-muted);">{{ r.session_date.strftime('%b %d, %Y') if r.session_date else '—' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="mm-empty-state">
+                    <div class="icon"><i class="bi bi-graph-up"></i></div>
+                    <h4>No performance records yet</h4>
+                    <p>Your tutors will add performance records as you attend sessions.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- NOTIFICATIONS TAB -->
+        <!-- ============================================================= -->
+        <div id="tab-notifications" class="mm-tab-content">
+            <div class="mm-page-header">
+                <h1>Notifications</h1>
+                <p>Stay updated with enrollment decisions and platform activity</p>
+            </div>
+
+            <div class="mm-card">
+                <div class="mm-card-header">
+                    <h3><i class="bi bi-bell"></i> All Notifications</h3>
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        {% if notif_unread %}
+                        <span class="mm-badge mm-badge-warning">{{ notif_unread }} unread</span>
+                        <button class="btn-mm btn-mm-outline btn-mm-sm" onclick="markAllRead()" id="mark-all-btn">
+                            <i class="bi bi-check-all"></i> Mark All Read
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if notif_list %}
+                <div class="mm-notification-list">
+                    {% for n in notif_list %}
+                    <div class="mm-notification-item {% if not n.is_read %}mm-notification-unread{% endif %}" id="notif-{{ n.id }}">
+                        <div class="mm-notification-icon">
+                            {% if not n.is_read %}
+                            <i class="bi bi-circle-fill" style="color: var(--blue); font-size: 8px;"></i>
+                            {% else %}
+                            <i class="bi bi-check-circle" style="color: var(--text-muted); font-size: 14px;"></i>
+                            {% endif %}
+                        </div>
+                        <div class="mm-notification-content">
+                            <p>{{ n.message }}</p>
+                            <span class="mm-notification-time">{{ n.created_at.strftime('%b %d, %Y at %I:%M %p') }}</span>
+                        </div>
+                        {% if not n.is_read %}
+                        <button class="btn-mm btn-mm-outline btn-mm-sm" onclick="markNotifRead({{ n.id }})" style="padding: 4px 10px; font-size: 0.75rem;">
+                            <i class="bi bi-check"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="mm-empty-state">
+                    <div class="icon"><i class="bi bi-bell-slash"></i></div>
+                    <h4>No notifications</h4>
+                    <p>You'll receive notifications here when your enrollment requests are reviewed or other events occur.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
     </main>
 </div>
 {% endblock %}
@@ -211,6 +580,83 @@
         document.querySelectorAll('.mm-sidebar-link').forEach(el => el.classList.remove('active'));
         document.getElementById('tab-' + tabName).classList.add('active');
         event.currentTarget.classList.add('active');
+    }
+
+    // --- Enrollment Request ---
+    async function requestEnrollment(batchId, btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Requesting...';
+        try {
+            const resp = await fetch('/enrollments/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ batch_id: batchId })
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                btn.innerHTML = '<i class="bi bi-check-circle"></i> Request Sent';
+                btn.className = 'btn-mm btn-mm-accent btn-mm-sm';
+                btn.style.pointerEvents = 'none';
+            } else {
+                btn.innerHTML = '<i class="bi bi-x-circle"></i> ' + (data.detail || 'Error');
+                btn.className = 'btn-mm btn-mm-danger btn-mm-sm';
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="bi bi-person-plus"></i> Request Enrollment';
+                    btn.className = 'btn-mm btn-mm-primary btn-mm-sm';
+                    btn.disabled = false;
+                }, 3000);
+            }
+        } catch (err) {
+            btn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Error';
+            btn.disabled = false;
+            setTimeout(() => {
+                btn.innerHTML = '<i class="bi bi-person-plus"></i> Request Enrollment';
+                btn.className = 'btn-mm btn-mm-primary btn-mm-sm';
+            }, 3000);
+        }
+    }
+
+    // --- Notifications ---
+    async function markNotifRead(notifId) {
+        try {
+            const resp = await fetch('/notifications/read', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ notification_id: notifId })
+            });
+            if (resp.ok) {
+                const item = document.getElementById('notif-' + notifId);
+                item.classList.remove('mm-notification-unread');
+                const btn = item.querySelector('button');
+                if (btn) btn.remove();
+                const iconEl = item.querySelector('.mm-notification-icon');
+                iconEl.innerHTML = '<i class="bi bi-check-circle" style="color: var(--text-muted); font-size: 14px;"></i>';
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    async function markAllRead() {
+        try {
+            const resp = await fetch('/notifications/read-all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (resp.ok) {
+                document.querySelectorAll('.mm-notification-unread').forEach(el => {
+                    el.classList.remove('mm-notification-unread');
+                    const btn = el.querySelector('button');
+                    if (btn) btn.remove();
+                    const iconEl = el.querySelector('.mm-notification-icon');
+                    iconEl.innerHTML = '<i class="bi bi-check-circle" style="color: var(--text-muted); font-size: 14px;"></i>';
+                });
+                const markAllBtn = document.getElementById('mark-all-btn');
+                if (markAllBtn) markAllBtn.remove();
+            }
+        } catch (err) {
+            console.error(err);
+        }
     }
 </script>
 {% endblock %}

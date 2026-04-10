@@ -1559,3 +1559,409 @@ select.mm-form-control {
 .animate-in-delay-2 { animation-delay: 0.1s; opacity: 0; }
 .animate-in-delay-3 { animation-delay: 0.15s; opacity: 0; }
 .animate-in-delay-4 { animation-delay: 0.2s; opacity: 0; }
+
+
+/* =============================================================================
+   TUTOR SAFETY — Profile Completion Banner & Trust Indicators
+   ============================================================================= */
+
+.mm-profile-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-radius: var(--radius-md);
+    font-size: 0.88rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+    animation: fadeIn 0.35s ease-out forwards;
+}
+
+.mm-profile-banner .banner-icon {
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.mm-profile-banner .banner-text strong {
+    font-weight: 700;
+}
+
+.mm-profile-banner-warning {
+    background: linear-gradient(135deg, #FFF7ED, #FFFBEB);
+    color: #92400E;
+    border: 1px solid #FDE68A;
+}
+
+.mm-profile-banner-success {
+    background: linear-gradient(135deg, #F0FDF4, #ECFDF5);
+    color: #166534;
+    border: 1px solid #BBF7D0;
+}
+
+/* Profile Status Indicator */
+.mm-profile-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 50px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.mm-profile-status-complete {
+    background: #ECFDF5;
+    color: #059669;
+}
+
+.mm-profile-status-complete::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #059669;
+    animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.mm-profile-status-incomplete {
+    background: #FEF3C7;
+    color: #B45309;
+}
+
+.mm-profile-status-incomplete::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #F59E0B;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* Tutor Registration — conditional fields */
+.mm-tutor-fields {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.4s ease, opacity 0.3s ease, margin 0.3s ease;
+    margin-top: 0;
+}
+
+.mm-tutor-fields.visible {
+    max-height: 600px;
+    opacity: 1;
+    margin-top: 0.5rem;
+}
+
+.mm-tutor-fields-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0.75rem 0;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mm-tutor-fields-divider::before,
+.mm-tutor-fields-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+/* Trust Indicators on Tutor Cards */
+.mm-trust-indicators {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+}
+
+.mm-trust-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.mm-trust-item i {
+    font-size: 0.85rem;
+}
+
+.mm-trust-item.rating i {
+    color: #F59E0B;
+}
+
+.mm-trust-item.students i {
+    color: var(--blue);
+}
+
+.mm-trust-item.experience i {
+    color: var(--green);
+}
+
+/* Profile Header in Tutor Detail */
+.mm-profile-header-bio {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    margin-top: 6px;
+    line-height: 1.6;
+    font-style: italic;
+}
+
+.mm-profile-fullname {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    margin-left: 6px;
+}
+
+/* Required field marker */
+.mm-required::after {
+    content: ' *';
+    color: var(--red);
+    font-weight: 400;
+}
+
+/* Profile completion progress bar */
+.mm-profile-progress {
+    width: 100%;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 8px;
+}
+
+.mm-profile-progress-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+.mm-profile-progress-bar.complete {
+    background: linear-gradient(90deg, #059669, #10B981);
+    width: 100%;
+}
+
+.mm-profile-progress-bar.partial {
+    background: linear-gradient(90deg, #F59E0B, #FBBF24);
+}
+
+
+/* =============================================================================
+   ENROLLMENT SYSTEM STYLES
+   ============================================================================= */
+
+.mm-enrollment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.mm-enrollment-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    background: var(--bg-gray);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+    gap: 1rem;
+}
+
+.mm-enrollment-card:hover {
+    border-color: var(--blue);
+    box-shadow: var(--shadow-sm);
+}
+
+.mm-enrollment-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.mm-enrollment-avatar {
+    font-size: 1.8rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.mm-enrollment-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.mm-enrollment-details strong {
+    font-size: 0.95rem;
+    color: var(--text);
+}
+
+.mm-enrollment-meta {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.mm-enrollment-date {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.mm-enrollment-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+
+/* =============================================================================
+   NOTIFICATION STYLES
+   ============================================================================= */
+
+.mm-notification-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.mm-notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+
+.mm-notification-item:hover {
+    background: var(--bg-gray);
+}
+
+.mm-notification-unread {
+    background: var(--blue-pale);
+    border-left: 3px solid var(--blue);
+}
+
+.mm-notification-unread:hover {
+    background: #dfe8ff;
+}
+
+.mm-notification-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.mm-notification-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.mm-notification-content p {
+    font-size: 0.9rem;
+    color: var(--text);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.mm-notification-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+    display: block;
+}
+
+
+/* =============================================================================
+   PERFORMANCE & RATING BADGES
+   ============================================================================= */
+
+.mm-rating-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.mm-rating-excellent {
+    background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+    color: #92400E;
+}
+
+.mm-rating-great {
+    background: linear-gradient(135deg, #DBEAFE, #BFDBFE);
+    color: #1E40AF;
+}
+
+.mm-rating-good {
+    background: linear-gradient(135deg, #D1FAE5, #A7F3D0);
+    color: #065F46;
+}
+
+.mm-rating-satisfactory {
+    background: linear-gradient(135deg, #F3F4F6, #E5E7EB);
+    color: #374151;
+}
+
+
+/* =============================================================================
+   ADDITIONAL BADGE VARIANTS
+   ============================================================================= */
+
+.mm-badge-danger {
+    background: #FEF2F2;
+    color: var(--red);
+    border: 1px solid #FECACA;
+}
+
+.mm-badge-fee {
+    background: linear-gradient(135deg, #EDE9FE, #DDD6FE);
+    color: #5B21B6;
+    font-weight: 600;
+}
+
+
+/* =============================================================================
+   RESPONSIVE ADJUSTMENTS FOR NEW COMPONENTS
+   ============================================================================= */
+
+@media (max-width: 768px) {
+    .mm-enrollment-card {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .mm-enrollment-actions {
+        width: 100%;
+    }
+
+    .mm-enrollment-actions .btn-mm {
+        flex: 1;
+    }
+}
